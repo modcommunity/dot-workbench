@@ -5,14 +5,14 @@ dot-workbench is the admin live-edit surface on top of `DotProfileRuntime` (dot-
 ## What already exists (investigated 2026-10-22)
 
 - **No HTTP server exists in the family.** dot-server's `DotRconServer` is Source-style RCON over TCP plus a WebSocket listener (the WebSocket handshake is `WebSocketPeer.accept_stream()`, not a request/response server). dot-server-query's `DotQueryServer` is UDP (DQP/A2S) with a TCP side for DQP. dot-net has transports and replication, no HTTP. dot-core's `DotHttp` is a client. `dot-serve` is a Python tool, not an in-game server.
-- So the HTTP adapter cannot be hosted by an existing server and is not written here. Writing a second one-off server inside this addon is refused; the right owner is a small shared `DotHttpServer` in dot-core's `net/` (built on `TCPServer`, `TLSOptions` for native TLS), which dot-workbench and anything else would use. That is filed as a follow-up on the board.
+- So the HTTP adapter cannot be hosted by an existing server and is not written here. Writing a second one-off server inside this addon was refused; the owner is the shared `DotHttpServer` in dot-core's `net/` (built 2026-10-22) (built on `TCPServer`, `TLSOptions` for native TLS), which dot-workbench and anything else would use. That is filed as a follow-up on the board.
 - What the runtime exposes: `handle_request(actor, req)` for `set`, `reset_key`, `reset`, `save`, returning a `DotResult` whose value is the changed row; `permit(actor, flag)` with `edit_flag` `cvar` and `save_flag` `root`; `revision(kind, id)`; `profile_changed` signal; INFO audit line per edit. It has no list or get; `DotProfileSet` supplies `list_ids`, `has_id`, `load_profile` and `runtime_paths`, which `DotWorkbenchApi` uses.
 
 ## Layers
 
 1. **`DotWorkbenchApi`** (done): transport-agnostic. `handle(actor, req) -> DotResult`, `handle_json(token, text) -> String`, `authenticate(token)`, `to_reply(res)`.
-2. **HTTP adapter** (not written): maps `POST /api` (JSON body, `Authorization: Bearer <token>`) to `handle_json`, and `GET /` to the static page. Needs the shared `DotHttpServer` above.
-3. **Static page** (not written): one `index.html`, hand-written CSS and plain JavaScript, no build step, no framework, no CDN, shipped inside the addon and served from memory. Modern look: system font stack, light and dark by `prefers-color-scheme`, a kind and profile picker, a table of fields with the effective value, the runtime override highlighted, inline edit with the server's validation error shown beside the field, per-field reset, a Save button that asks for confirmation.
+2. **HTTP adapter** (`DotWorkbenchHttp`, done, on dot-core's `DotHttpServer`): also REST routes under `/api/profiles`; maps `POST /api` (JSON body, `Authorization: Bearer <token>`) to `handle_json`, and `GET /` to the static page. Needs the shared `DotHttpServer` above.
+3. **Static page** (`web/index.html`, done): one `index.html`, hand-written CSS and plain JavaScript, no build step, no framework, no CDN, shipped inside the addon and served from memory. Modern look: system font stack, light and dark by `prefers-color-scheme`, a kind and profile picker, a table of fields with the effective value, the runtime override highlighted, inline edit with the server's validation error shown beside the field, per-field reset, a Save button that asks for confirmation.
 4. **In-game panel**: later, `DotUiForm` over the same `DotWorkbenchApi`; `DotProfileEditorScreen` (dot-menu) is wrapped or moved here.
 
 ## JSON API
@@ -59,4 +59,4 @@ dot-core only. dot-server (admin flags), dot-auth (identity), dot-ui and dot-men
 
 ## Not done
 
-HTTP server and adapter, the static page, config loading, the in-game panel, rate limiting of failed tokens (reuse the lockout idea of `DotRconServer`), CI workflow.
+the in-game panel, rate limiting of failed tokens (reuse the lockout idea of `DotRconServer`), CI workflow.

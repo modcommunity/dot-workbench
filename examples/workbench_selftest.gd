@@ -1,13 +1,13 @@
 extends Node
 
-## Exercises [DotWorkbenchApi]: list, get, set, reset, save, permission refusal and bad input.
+## Exercises [DotWorkbenchApi] and its HTTP adapter: list, get, set, reset, save, permission refusal and bad input.
 ##
 ## [codeblock]
 ## godot --headless --path . res://examples/workbench_selftest.tscn
 ## [/codeblock]
 
-const SECTIONS := 6
-const CHECKS := 33
+const SECTIONS := 7
+const CHECKS := 51
 const BASE := "user://workbench_selftest"
 
 var _passed := 0
@@ -25,6 +25,7 @@ func _ready() -> void:
 	_test_permission()
 	_test_bad_input()
 	_test_json()
+	_test_http()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -141,6 +142,74 @@ func _test_json() -> void:
 	_check(junk["ok"] == false and junk["error"]["code"] == DotError.CODE_INVALID, "a malformed body is invalid, not a crash")
 	var set: Dictionary = JSON.parse_string(api.handle_json("s3cret", '{"op":"set","kind":"npc","id":"ghoul","key":"mode","value":"ranged"}'))
 	_check(set["ok"] == true and set["value"]["paths"]["mode"] == "ranged", "set over JSON returns the changed row")
+
+
+func _http_call(h: DotWorkbenchHttp, method: String, path: String, token: String = "s3cret", body: String = "") -> Dictionary:
+	var head := "%s %s HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n" % [method, path, body.to_utf8_buffer().size()]
+	if token != "":
+		head += "Authorization: Bearer %s\r\n" % token
+	var c := StreamPeerTCP.new()
+	c.connect_to_host("127.0.0.1", h.server.port())
+	var out := PackedByteArray()
+	var sent := false
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 3000:
+		c.poll()
+		if not sent and c.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			c.put_data((head + "\r\n" + body).to_utf8_buffer())
+			sent = true
+		h.poll()
+		c.poll()
+		if c.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			var n := c.get_available_bytes()
+			if n > 0:
+				out.append_array(c.get_data(n)[1])
+		elif sent:
+			break
+		OS.delay_msec(1)
+	var text := out.get_string_from_utf8()
+	var i := text.find("\r\n\r\n")
+	var payload := text.substr(i + 4) if i >= 0 else ""
+	var parsed: Variant = JSON.parse_string(payload) if payload.begins_with("{") else null
+	return {"status": int(text.split(" ")[1]) if text.length() > 12 else -1, "json": parsed if parsed is Dictionary else {}, "text": payload}
+
+
+func _test_http() -> void:
+	_section("HTTP adapter")
+	var api := _api()
+	var h := DotWorkbenchHttp.new(api)
+	var off := h.start_from_config({"enabled": false})
+	_check(off.ok and not h.server.is_listening(), "disabled by default opens nothing")
+	_check(not DotWorkbenchHttp.new(_api()).start_from_config({"enabled": true}).ok, "enabled with no token source refuses to start")
+	_check(not DotWorkbenchHttp.new(_api()).start_from_config({"enabled": true, "token_file": BASE + "/missing.token"}).ok, "a missing token file refuses to start")
+	_w("workbench.token", "  s3cret\n")
+	var res := h.start_from_config({"enabled": true, "port": 0, "token_file": BASE + "/workbench.token"})
+	_check(res.ok and h.server.is_listening(), "enabled with a token file listens on loopback")
+	if not res.ok:
+		return
+	var page := _http_call(h, "GET", "/", "")
+	_check(page["status"] == 200 and str(page["text"]).contains("<title>Workbench</title>"), "the page is served without a token")
+	_check(_http_call(h, "GET", "/api/profiles", "")["status"] == 401, "no token is 401")
+	_check(_http_call(h, "GET", "/api/profiles", "wrong")["status"] == 401, "a wrong token is 401")
+	var kinds := _http_call(h, "GET", "/api/profiles")
+	_check(kinds["status"] == 200 and kinds["json"]["value"]["kinds"] == ["npc"], "GET /api/profiles lists kinds")
+	var ids := _http_call(h, "GET", "/api/profiles/npc")
+	_check(ids["json"]["value"]["ids"].has("zombie"), "GET kind lists ids")
+	var set := _http_call(h, "PUT", "/api/profiles/npc/zombie/health", "s3cret", '{"value": 77}')
+	_check(set["status"] == 200, "PUT sets a field")
+	var got := _http_call(h, "GET", "/api/profiles/npc/zombie")
+	_check(got["json"]["value"]["values"]["health"] == 77 and got["json"]["value"]["rev"] == 1, "GET shows the edit and revision")
+	_check(_http_call(h, "PUT", "/api/profiles/npc/zombie/health", "s3cret", '{"value": 99999}')["status"] == 400, "an invalid value is 400 with the runtime's message")
+	_check(_http_call(h, "PUT", "/api/profiles/npc/zombie/health", "s3cret", "{nope")["status"] == 400, "a malformed body is 400")
+	var env := _http_call(h, "POST", "/api", "s3cret", '{"op":"get","kind":"npc","id":"zombie"}')
+	_check(env["json"]["ok"] == true and env["json"]["value"]["id"] == "zombie", "POST /api envelope works")
+	_check(_http_call(h, "DELETE", "/api/profiles/npc/zombie/health")["status"] == 200, "DELETE key resets it")
+	api.handle(DotWorkbenchApi.TOKEN_ACTOR, _req("set", "npc", "zombie", "speed", 4.0))
+	_check(_http_call(h, "POST", "/api/profiles/save/npc/zombie")["json"]["ok"] == true, "POST save writes the server layer")
+	_check(_http_call(h, "DELETE", "/api/profiles/npc/zombie")["status"] == 200, "DELETE profile resets all")
+	api.token_flags = PackedStringArray(["cvar"])
+	_check(_http_call(h, "POST", "/api/profiles/save/npc/zombie")["status"] == 403, "a token without root cannot save (403)")
+	h.stop()
 
 
 func _w(rel: String, text: String) -> void:

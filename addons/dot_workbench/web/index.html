@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workbench</title>
+<style>
+:root { color-scheme: light dark; --bg:#f6f7f9; --panel:#fff; --text:#1b1f24; --muted:#667085; --line:#e2e5ea; --accent:#2563eb; --accent-text:#fff; --warn:#b45309; --warn-bg:#fef3c7; --bad:#b42318; --ok:#067647; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --panel:#171b21; --text:#e6e9ee; --muted:#98a2b3; --line:#2a313a; --accent:#6b9bff; --accent-text:#0b1020; --warn:#fbbf24; --warn-bg:#3a2e0b; --bad:#f97066; --ok:#47cd89; } }
+:root[data-theme=light] { color-scheme: light; --bg:#f6f7f9; --panel:#fff; --text:#1b1f24; --muted:#667085; --line:#e2e5ea; --accent:#2563eb; --accent-text:#fff; --warn:#b45309; --warn-bg:#fef3c7; --bad:#b42318; --ok:#067647; }
+:root[data-theme=dark] { color-scheme: dark; --bg:#0f1216; --panel:#171b21; --text:#e6e9ee; --muted:#98a2b3; --line:#2a313a; --accent:#6b9bff; --accent-text:#0b1020; --warn:#fbbf24; --warn-bg:#3a2e0b; --bad:#f97066; --ok:#47cd89; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+header { display:flex; align-items:center; gap:12px; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+header h1 { font-size:17px; margin:0 auto 0 0; font-weight:650; }
+main { max-width:960px; margin:20px auto; padding:0 16px; display:grid; gap:16px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
+.row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+input, select, button { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:6px 10px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+button { cursor:pointer; }
+button.primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
+button:disabled { opacity:.5; cursor:default; }
+table { width:100%; border-collapse:collapse; }
+th { text-align:left; color:var(--muted); font-weight:600; font-size:13px; }
+th, td { padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+td.key { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }
+td input { width:100%; min-width:8em; }
+tr.over td.key::after { content:"runtime"; margin-left:8px; font:600 11px system-ui; color:var(--warn); background:var(--warn-bg); border-radius:99px; padding:1px 7px; }
+.err { color:var(--bad); font-size:13px; }
+.ok { color:var(--ok); font-size:13px; }
+.muted { color:var(--muted); font-size:13px; }
+#status { min-height:1.5em; }
+.hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Workbench</h1>
+  <span class="muted" id="rev"></span>
+  <button id="theme" title="Switch theme">Theme</button>
+  <button id="logout" class="hidden">Forget token</button>
+</header>
+<main>
+  <section class="card" id="login">
+    <form class="row" id="loginform">
+      <label for="token">Admin token</label>
+      <input id="token" type="password" autocomplete="off" required size="36">
+      <button class="primary">Connect</button>
+    </form>
+    <div class="err" id="loginerr"></div>
+  </section>
+  <section class="card hidden" id="picker">
+    <div class="row">
+      <label for="kind">Kind</label><select id="kind"></select>
+      <label for="id">Profile</label><select id="id"></select>
+      <button id="reload">Reload</button>
+    </div>
+  </section>
+  <section class="card hidden" id="editor">
+    <table>
+      <thead><tr><th>Field</th><th>Effective value</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="row" style="margin-top:14px">
+      <button id="resetall">Reset all runtime edits</button>
+      <button id="save" class="primary">Save to server layer</button>
+    </div>
+  </section>
+  <div id="status" role="status" aria-live="polite"></div>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let token = sessionStorage.getItem("wb-token") || "";
+let current = null;
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let data;
+  try { data = await res.json(); } catch (e) { data = { ok: false, error: { code: "http", message: res.status + " " + res.statusText } }; }
+  if (res.status === 401) { logout("Token refused."); }
+  return data;
+}
+const enc = encodeURIComponent;
+
+function say(text, cls) { const s = $("status"); s.textContent = text || ""; s.className = cls || "muted"; }
+
+function flatten(obj, prefix, out) {
+  for (const [k, v] of Object.entries(obj || {})) {
+    const p = prefix ? prefix + "." + k : k;
+    if (v && typeof v === "object" && !Array.isArray(v)) flatten(v, p, out); else out[p] = v;
+  }
+  return out;
+}
+
+function parseLike(text, sample) {
+  if (typeof sample === "number") { const n = Number(text); if (text.trim() === "" || Number.isNaN(n)) throw new Error("not a number"); return n; }
+  if (typeof sample === "boolean") { if (text === "true") return true; if (text === "false") return false; throw new Error("true or false"); }
+  if (Array.isArray(sample) || (sample && typeof sample === "object")) return JSON.parse(text);
+  return text;
+}
+
+function logout(msg) {
+  token = ""; sessionStorage.removeItem("wb-token");
+  for (const id of ["picker", "editor", "logout"]) $(id).classList.add("hidden");
+  $("login").classList.remove("hidden");
+  $("loginerr").textContent = msg || "";
+}
+
+async function connect() {
+  const r = await api("GET", "/api/profiles");
+  if (!r.ok) { logout(r.error.message); return; }
+  sessionStorage.setItem("wb-token", token);
+  $("login").classList.add("hidden");
+  for (const id of ["picker", "logout"]) $(id).classList.remove("hidden");
+  fill($("kind"), r.value.kinds);
+  await loadIds();
+}
+
+function fill(sel, items) { sel.replaceChildren(...items.map(i => new Option(i, i))); }
+
+async function loadIds() {
+  const r = await api("GET", "/api/profiles/" + enc($("kind").value));
+  if (!r.ok) { say(r.error.message, "err"); return; }
+  fill($("id"), r.value.ids);
+  await loadProfile();
+}
+
+async function loadProfile() {
+  const kind = $("kind").value, id = $("id").value;
+  if (!id) { $("editor").classList.add("hidden"); return; }
+  const r = await api("GET", "/api/profiles/" + enc(kind) + "/" + enc(id));
+  if (!r.ok) { say(r.error.message, "err"); return; }
+  current = r.value;
+  render();
+}
+
+function render() {
+  const values = flatten(current.values, "", {});
+  const over = current.runtime || {};
+  $("rev").textContent = "revision " + current.rev;
+  const rows = $("rows"); rows.replaceChildren();
+  for (const key of Object.keys(values).sort()) {
+    const v = values[key];
+    const tr = document.createElement("tr");
+    if (key in over) tr.className = "over";
+    const k = document.createElement("td"); k.className = "key"; k.textContent = key;
+    const val = document.createElement("td");
+    const input = document.createElement("input");
+    input.value = typeof v === "object" ? JSON.stringify(v) : String(v);
+    input.setAttribute("aria-label", key);
+    const err = document.createElement("div"); err.className = "err";
+    val.append(input, err);
+    const act = document.createElement("td"); act.className = "row";
+    const set = document.createElement("button"); set.textContent = "Set"; set.className = "primary";
+    const reset = document.createElement("button"); reset.textContent = "Reset"; reset.disabled = !(key in over);
+    act.append(set, reset);
+    const apply = async () => {
+      err.textContent = "";
+      let parsed;
+      try { parsed = parseLike(input.value, v); } catch (e) { err.textContent = e.message; return; }
+      const r = await api("PUT", "/api/profiles/" + enc($("kind").value) + "/" + enc($("id").value) + "/" + enc(key), { value: parsed });
+      if (!r.ok) { err.textContent = r.error.message; return; }
+      say(key + " set", "ok"); await loadProfile();
+    };
+    set.onclick = apply;
+    input.onkeydown = e => { if (e.key === "Enter") apply(); };
+    reset.onclick = async () => {
+      const r = await api("DELETE", "/api/profiles/" + enc($("kind").value) + "/" + enc($("id").value) + "/" + enc(key));
+      if (!r.ok) { err.textContent = r.error.message; return; }
+      say(key + " reset", "ok"); await loadProfile();
+    };
+    tr.append(k, val, act); rows.append(tr);
+  }
+  $("editor").classList.remove("hidden");
+}
+
+$("loginform").onsubmit = e => { e.preventDefault(); token = $("token").value.trim(); $("token").value = ""; connect(); };
+$("logout").onclick = () => logout("");
+$("kind").onchange = loadIds;
+$("id").onchange = loadProfile;
+$("reload").onclick = loadProfile;
+$("resetall").onclick = async () => {
+  const r = await api("DELETE", "/api/profiles/" + enc($("kind").value) + "/" + enc($("id").value));
+  say(r.ok ? "runtime edits cleared" : r.error.message, r.ok ? "ok" : "err"); await loadProfile();
+};
+$("save").onclick = async () => {
+  const kind = $("kind").value, id = $("id").value;
+  if (!confirm("Write " + kind + "/" + id + " to the server layer? It survives restarts.")) return;
+  const r = await api("POST", "/api/profiles/save/" + enc(kind) + "/" + enc(id));
+  say(r.ok ? "saved" : r.error.message, r.ok ? "ok" : "err");
+};
+$("theme").onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+};
+if (token) connect();
+</script>
+</body>
+</html>
