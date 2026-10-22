@@ -62,4 +62,10 @@ dot-core only. dot-server (admin flags), dot-auth (identity), dot-ui and dot-men
 
 ## Not done
 
-the in-game panel, CI workflow.
+the in-game panel here (game-playground has its own), CI workflow.
+
+## Hosting it in a game and exporting it
+
+- The host builds `DotWorkbenchApi` over its `DotProfileRuntime`, adds its `DotProfileSet`s, wraps it in `DotWorkbenchHttp`, calls `start_from_config(DotWorkbenchHttp.read_config())` once the console's permit is set, `poll()` from `_process`, and `stop()` on unload. game-playground's `game/playground_workbench.gd` is the reference host. Without a `workbench:` block, or with `enabled: false`, nothing is opened.
+- **An export must include `*.html`.** The page is `addons/dot_workbench/web/index.html`, a plain file, and Godot's exporter drops files it does not import unless the preset's `include_filter` names them. Without it the server starts and `GET /` answers an empty page, with no error. Add `*.html` to the include filter of every preset that ships a host (a server preset; web builds are clients and never host it). Verified 2026-10-22 with `--export-pack` on this repository: the pack lacks `web/index.html` with an empty filter and holds it with `*.html`.
+- Set `page_path` to a file the host ships itself if it wants another page; it is read once at start.
