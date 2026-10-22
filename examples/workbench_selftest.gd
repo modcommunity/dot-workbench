@@ -101,7 +101,7 @@ func _test_save() -> void:
 	api.handle(a, _req("set", "npc", "zombie", "health", 321))
 	var r := api.handle(a, _req("save"))
 	_check(r.ok, "save succeeds for the token")
-	_check(FileAccess.file_exists(BASE.path_join("server/npc/zombie.yml")), "the server-tier file is written")
+	_check(FileAccess.file_exists(BASE.path_join("server/game/mygame/npc/zombie.yml")), "the server-tier file is written")
 	api.handle(a, _req("reset"))
 	_check(api.handle(a, _req("get")).value["values"]["health"] == 321, "the saved value survives a reset")
 
