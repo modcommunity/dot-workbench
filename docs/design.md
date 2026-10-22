@@ -62,7 +62,7 @@ dot-core only. dot-server (admin flags), dot-auth (identity), dot-ui and dot-men
 
 ## Not done
 
-wiring `DotWorkbenchPanel` into a game's admin menu (game-playground has its own panel), a Save-to-server button in the screen, dot-auth identity wiring, CI workflow.
+wiring `DotWorkbenchPanel` into a game's admin menu (game-playground has its own panel), a Save-to-server button in the screen. Identity wiring is `DotWorkbenchIdentity`; CI is `.github/workflows`.
 
 ## Hosting it in a game and exporting it
 

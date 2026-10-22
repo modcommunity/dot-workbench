@@ -6,8 +6,8 @@ extends Node
 ## godot --headless --path . res://examples/workbench_selftest.tscn
 ## [/codeblock]
 
-const SECTIONS := 8
-const CHECKS := 68
+const SECTIONS := 9
+const CHECKS := 81
 const BASE := "user://workbench_selftest"
 
 var _passed := 0
@@ -27,6 +27,7 @@ func _ready() -> void:
 	_test_json()
 	_test_http()
 	_test_panel()
+	_test_identity()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -315,3 +316,52 @@ func _check(condition: bool, what: String) -> void:
 
 func _line(text: String) -> void:
 	print(text)
+
+
+class FakeIdentity extends RefCounted:
+	var uid := ""
+	var is_guest := false
+	var expires_at := 0
+	var group_list: Array = []
+	func is_expired() -> bool:
+		return expires_at > 0 and expires_at <= int(Time.get_unix_time_from_system())
+	func groups() -> Array:
+		return group_list
+
+
+func _fake(uid: String, guest := false, grp: Array = [], exp := 0) -> FakeIdentity:
+	var f := FakeIdentity.new()
+	f.uid = uid
+	f.is_guest = guest
+	f.group_list = grp
+	f.expires_at = exp
+	return f
+
+
+func _test_identity() -> void:
+	_section("identity wiring")
+	var api := _api()
+	api.permit = Callable()
+	var table := {"t-admin": _fake("backbone:a"), "t-user": _fake("backbone:u"), "t-guest": _fake("guest:g", true),
+		"t-group": _fake("backbone:m", false, ["workbench"]), "t-old": _fake("backbone:a", false, [], 1),
+		"t-dict": {"uid": "backbone:a"}, "t-nouid": _fake("")}
+	var gate := DotWorkbenchIdentity.new()
+	gate.resolver = func(t: String) -> Variant: return table.get(t)
+	_check(not gate.authenticate("t-admin") is String, "with no admins configured nobody is admitted (deny by default)")
+	gate.admin_uids = PackedStringArray(["backbone:a"])
+	gate.admin_groups = PackedStringArray(["workbench"])
+	gate.attach(api)
+	var ok := api.authenticate("t-admin")
+	_check(ok.ok and ok.value == "id:backbone:a", "a listed admin is admitted with an id: actor")
+	_check(api.handle(ok.value, _req("set", "npc", "zombie", "health", 12)).ok, "an admitted admin may edit")
+	_check(api.handle(ok.value, _req("save")).ok, "an admitted admin holds root by default")
+	_check(api.authenticate("t-group").ok, "a member of an admin group is admitted")
+	_check(_code(api.authenticate("t-user")) == DotError.CODE_FORBIDDEN, "a signed-in non-admin is refused")
+	_check(_code(api.authenticate("t-guest")) == DotError.CODE_FORBIDDEN, "a guest is refused")
+	_check(_code(api.authenticate("t-old")) == DotError.CODE_FORBIDDEN, "an expired identity is refused")
+	_check(_code(api.authenticate("t-nouid")) == DotError.CODE_FORBIDDEN, "an identity with no uid is refused")
+	_check(_code(api.authenticate("nobody")) == DotError.CODE_FORBIDDEN and _code(api.authenticate("")) == DotError.CODE_FORBIDDEN, "an unknown or empty token (anonymous) is refused")
+	_check(api.authenticate("t-dict").ok, "a Dictionary identity with a uid works")
+	_check(not gate.permit("id:backbone:u", "cvar") and not gate.permit("stranger", "cvar"), "an actor the gate did not admit holds nothing")
+	gate.fallback_permit = func(uid: String, flag: String) -> bool: return uid == "backbone:a" and flag == "cvar"
+	_check(api.handle(ok.value, _req("set", "npc", "zombie", "health", 13)).ok and _code(api.handle(ok.value, _req("save"))) == DotError.CODE_FORBIDDEN, "a fallback permit decides the flags instead")
