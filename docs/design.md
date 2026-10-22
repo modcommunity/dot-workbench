@@ -49,6 +49,9 @@ workbench:
     cert: /etc/dot/workbench.crt   # native only: paths, never contents
     key: /etc/dot/workbench.key
   token_file: /etc/dot/workbench.token   # secrets are file paths, never values in yml
+  max_failures: 5         # failed tokens per address inside window_sec before a lockout (0 disables)
+  window_sec: 60
+  lockout_sec: 300        # 429 with Retry-After for this long
 ```
 
 Layering is the family's: defaults < file < environment < command line, except that `token_file` contents and the TLS key are only ever read from the file. Binding to a non-loopback address with `mode: proxy` and no TLS logs a WARN at start. TLS is a reverse proxy by default (certificate renewal belongs there); native TLS is the option for a box with no proxy, using Godot's `TLSOptions.server(key, cert)`.
@@ -59,4 +62,4 @@ dot-core only. dot-server (admin flags), dot-auth (identity), dot-ui and dot-men
 
 ## Not done
 
-the in-game panel, rate limiting of failed tokens (reuse the lockout idea of `DotRconServer`), CI workflow.
+the in-game panel, CI workflow.

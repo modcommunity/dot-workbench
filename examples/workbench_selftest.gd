@@ -7,7 +7,7 @@ extends Node
 ## [/codeblock]
 
 const SECTIONS := 7
-const CHECKS := 51
+const CHECKS := 57
 const BASE := "user://workbench_selftest"
 
 var _passed := 0
@@ -209,6 +209,30 @@ func _test_http() -> void:
 	_check(_http_call(h, "DELETE", "/api/profiles/npc/zombie")["status"] == 200, "DELETE profile resets all")
 	api.token_flags = PackedStringArray(["cvar"])
 	_check(_http_call(h, "POST", "/api/profiles/save/npc/zombie")["status"] == 403, "a token without root cannot save (403)")
+	var now := [100.0]
+	h.clock = func() -> float: return now[0]
+	h.max_failures = 3
+	h.window_sec = 10.0
+	h.lockout_sec = 30.0
+	_http_call(h, "GET", "/api/profiles", "bad")
+	_http_call(h, "GET", "/api/profiles", "bad")
+	_check(_http_call(h, "GET", "/api/profiles")["status"] == 200, "a good token between failures still works and resets the count")
+	for i in 3:
+		_http_call(h, "GET", "/api/profiles", "bad")
+	var locked := _http_call(h, "GET", "/api/profiles")
+	_check(locked["status"] == 429, "failures at the limit lock the address out with 429")
+	_check(h.locked_addresses().has("127.0.0.1") and h.describe()["rate_limit"]["locked"].has("127.0.0.1"), "describe shows the locked address")
+	now[0] = 140.0
+	_check(_http_call(h, "GET", "/api/profiles")["status"] == 200, "the lockout lifts after lockout_sec")
+	_http_call(h, "GET", "/api/profiles", "bad")
+	_http_call(h, "GET", "/api/profiles", "bad")
+	now[0] = 160.0
+	_http_call(h, "GET", "/api/profiles", "bad")
+	_check(_http_call(h, "GET", "/api/profiles", "bad")["status"] == 401, "failures older than window_sec do not count")
+	h.max_failures = 0
+	for i in 5:
+		_http_call(h, "GET", "/api/profiles", "bad")
+	_check(_http_call(h, "GET", "/api/profiles")["status"] == 200, "max_failures 0 disables the limit")
 	h.stop()
 
 

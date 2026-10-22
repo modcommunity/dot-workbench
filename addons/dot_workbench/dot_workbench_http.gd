@@ -11,7 +11,16 @@ var server := DotHttpServer.new()
 ## Override to serve a different page; loaded once at start.
 var page_path := PAGE
 
+## Failed tokens per address inside `window_sec` before `lockout_sec` of 429s; 0 disables.
+var max_failures := 5
+var window_sec := 60.0
+var lockout_sec := 300.0
+## Override for tests: Callable() -> seconds.
+var clock := Callable()
+
 var _page := ""
+## address -> {"times": Array[float] of recent failures, "until": float lockout end}
+var _fails: Dictionary = {}
 
 
 func _init(p_api: DotWorkbenchApi = null) -> void:
@@ -47,6 +56,9 @@ func start_from_config(cfg: Dictionary) -> DotResult:
 		api.set_admin_token(tok.value)
 	elif not api.identity.is_valid():
 		return DotResult.fail(DotError.CODE_INVALID, "workbench enabled with no token_file and no identity; refusing to start")
+	max_failures = int(cfg.get("max_failures", max_failures))
+	window_sec = float(cfg.get("window_sec", window_sec))
+	lockout_sec = float(cfg.get("lockout_sec", lockout_sec))
 	var tls: Dictionary = cfg.get("tls", {}) if cfg.get("tls", {}) is Dictionary else {}
 	var native := str(tls.get("mode", "proxy")) == "native"
 	_load_page()
@@ -64,7 +76,51 @@ func stop() -> void:
 
 
 func describe() -> Dictionary:
-	return {"server": server.describe(), "page_loaded": not _page.is_empty()}
+	return {"server": server.describe(), "page_loaded": not _page.is_empty(), "rate_limit": {"max_failures": max_failures, "window_sec": window_sec, "lockout_sec": lockout_sec, "locked": locked_addresses()}}
+
+
+## Addresses currently locked out after failed tokens.
+func locked_addresses() -> PackedStringArray:
+	var out := PackedStringArray()
+	var t := _now()
+	for a in _fails:
+		if float(_fails[a]["until"]) > t:
+			out.append(a)
+	return out
+
+
+## Lifts a lockout, for an operator who locked themselves out.
+func clear_lockout(address: String) -> void:
+	_fails.erase(address)
+
+
+func _now() -> float:
+	return float(clock.call()) if clock.is_valid() else Time.get_ticks_msec() / 1000.0
+
+
+# Returns a refusal response, or null when the token is good. Counts failures per address.
+func _gate(req: DotHttpRequest) -> Variant:
+	var addr := req.remote_address
+	var t := _now()
+	var rec: Dictionary = _fails.get(addr, {"times": [], "until": 0.0})
+	if max_failures > 0 and float(rec["until"]) > t:
+		var r := DotHttpResponse.json(DotWorkbenchApi.to_reply(DotResult.fail(DotError.CODE_FORBIDDEN, "too many failed tokens; try again later")), 429)
+		r.headers["Retry-After"] = str(int(ceil(float(rec["until"]) - t)))
+		return r
+	var auth := api.authenticate(req.bearer_token())
+	if auth.ok:
+		_fails.erase(addr)
+		return auth
+	if max_failures > 0:
+		var times: Array = (rec["times"] as Array).filter(func(x: float) -> bool: return t - x < window_sec)
+		times.append(t)
+		rec["times"] = times
+		if times.size() >= max_failures:
+			rec["until"] = t + lockout_sec
+			rec["times"] = []
+			DotLog.warn(CHANNEL, "address locked out after failed tokens", {"address": addr, "seconds": lockout_sec})
+		_fails[addr] = rec
+	return _unauthorized()
 
 
 func _load_page() -> void:
@@ -85,9 +141,9 @@ func _on_page(_req: DotHttpRequest) -> DotHttpResponse:
 
 # Generic envelope: POST /api with the request object, the reply object back.
 func _on_envelope(req: DotHttpRequest) -> DotHttpResponse:
-	var auth := api.authenticate(req.bearer_token())
-	if not auth.ok:
-		return _unauthorized()
+	var auth: Variant = _gate(req)
+	if auth is DotHttpResponse:
+		return auth
 	var body := req.json_body()
 	if not body.ok or not (body.value is Dictionary):
 		return _reply(DotResult.fail(DotError.CODE_INVALID, "body must be a JSON object"))
@@ -96,9 +152,9 @@ func _on_envelope(req: DotHttpRequest) -> DotHttpResponse:
 
 # REST sugar over the same ops: /api/profiles[/kind[/id[/key]]] and /api/profiles/save/kind/id.
 func _on_profiles(req: DotHttpRequest) -> DotHttpResponse:
-	var auth := api.authenticate(req.bearer_token())
-	if not auth.ok:
-		return _unauthorized()
+	var auth: Variant = _gate(req)
+	if auth is DotHttpResponse:
+		return auth
 	var seg := PackedStringArray()
 	for s in req.rest.split("/", false):
 		seg.append(s)

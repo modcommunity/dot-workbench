@@ -26,6 +26,10 @@ th { text-align:left; color:var(--muted); font-weight:600; font-size:13px; }
 th, td { padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
 td.key { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }
 td input { width:100%; min-width:8em; }
+td.act { white-space:nowrap; width:1%; }
+td.act button + button { margin-left:6px; }
+button:disabled { color:var(--muted); }
+@media (max-width:520px) { header { padding:10px 14px; } th, td { padding:7px 4px; } td input { min-width:5em; } }
 tr.over td.key::after { content:"runtime"; margin-left:8px; font:600 11px system-ui; color:var(--warn); background:var(--warn-bg); border-radius:99px; padding:1px 7px; }
 .err { color:var(--bad); font-size:13px; }
 .ok { color:var(--ok); font-size:13px; }
@@ -156,7 +160,7 @@ function render() {
     input.setAttribute("aria-label", key);
     const err = document.createElement("div"); err.className = "err";
     val.append(input, err);
-    const act = document.createElement("td"); act.className = "row";
+    const act = document.createElement("td"); act.className = "act";
     const set = document.createElement("button"); set.textContent = "Set"; set.className = "primary";
     const reset = document.createElement("button"); reset.textContent = "Reset"; reset.disabled = !(key in over);
     act.append(set, reset);

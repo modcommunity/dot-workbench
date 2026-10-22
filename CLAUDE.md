@@ -7,4 +7,4 @@ Admin live-edit surface over dot-core's `DotProfileRuntime`: a transport-agnosti
 - All profile rules (validation, revisions, audit, save) belong to `DotProfileRuntime`; do not copy them here.
 - The HTTP server is dot-core's `DotHttpServer`; `DotWorkbenchHttp` only mounts routes on it. The page is `addons/dot_workbench/web/index.html` (one file, no build); an export needs `*.html` in its include filter. The host calls `DotWorkbenchHttp.poll()` from `_process`.
 - Secrets (admin token, TLS key) are read from files only, never env or argv.
-- Validate: `heavy -- godot --headless --path . --import`, parse every `.gd` with `--check-only`, then `heavy -- godot --headless --path . res://examples/workbench_selftest.tscn` (7 sections, 51 checks).
+- Validate: `heavy -- godot --headless --path . --import`, parse every `.gd` with `--check-only`, then `heavy -- godot --headless --path . res://examples/workbench_selftest.tscn` (7 sections, 57 checks).
