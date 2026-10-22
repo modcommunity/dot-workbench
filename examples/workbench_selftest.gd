@@ -6,8 +6,8 @@ extends Node
 ## godot --headless --path . res://examples/workbench_selftest.tscn
 ## [/codeblock]
 
-const SECTIONS := 7
-const CHECKS := 57
+const SECTIONS := 8
+const CHECKS := 68
 const BASE := "user://workbench_selftest"
 
 var _passed := 0
@@ -26,6 +26,7 @@ func _ready() -> void:
 	_test_bad_input()
 	_test_json()
 	_test_http()
+	_test_panel()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -234,6 +235,45 @@ func _test_http() -> void:
 		_http_call(h, "GET", "/api/profiles", "bad")
 	_check(_http_call(h, "GET", "/api/profiles")["status"] == 200, "max_failures 0 disables the limit")
 	h.stop()
+
+
+## Stands in for DotProfileEditorScreen so the binding is tested without dot-ui or dot-menu.
+class FakeScreen extends RefCounted:
+	var save_target: Callable
+	var reset_target: Callable
+	var has_override: Callable
+	var target_label := ""
+	var kind := "npc"
+	var id := "zombie"
+	func current_kind() -> String:
+		return kind
+	func current_id() -> String:
+		return id
+
+
+func _test_panel() -> void:
+	_section("in-game panel binding")
+	var api := _api()
+	var set: DotProfileSet = api._sets["npc"]
+	var scr := FakeScreen.new()
+	var panel := DotWorkbenchPanel.new(api, DotWorkbenchApi.TOKEN_ACTOR)
+	panel.attach(scr)
+	_check(scr.target_label == DotWorkbenchPanel.TARGET_LABEL and scr.save_target.is_valid(), "attach sets the hooks and label")
+	_check(not scr.has_override.call(set, "zombie"), "no override before an edit")
+	var r: DotResult = scr.save_target.call(set, "zombie", {"health": 222, "speed": 7.5})
+	_check(r.ok and api.runtime.revision("npc", "zombie") == 2, "Apply writes each key through the runtime (revision 2)")
+	_check(api.handle(DotWorkbenchApi.TOKEN_ACTOR, _req("get")).value["values"]["health"] == 222, "the edit is live")
+	_check(scr.has_override.call(set, "zombie"), "override reported after an edit")
+	var bad: DotResult = scr.save_target.call(set, "zombie", {"health": 300, "speed": 9999.0})
+	_check(not bad.ok and _code(bad) == DotError.CODE_INVALID, "an invalid value is refused")
+	_check(api.handle(DotWorkbenchApi.TOKEN_ACTOR, _req("get")).value["values"]["health"] == 222, "a refused Apply leaves the earlier keys unchanged")
+	_check(panel.save_to_server().ok and FileAccess.file_exists(BASE.path_join("server/game/mygame/npc/zombie.yml")), "save_to_server writes the server tier")
+	_check(scr.reset_target.call(set, "zombie").ok and not scr.has_override.call(set, "zombie"), "reset drops the runtime layer")
+	var plain := DotWorkbenchPanel.new(api, "nobody")
+	var scr2 := FakeScreen.new()
+	plain.attach(scr2)
+	_check(_code(scr2.save_target.call(set, "zombie", {"health": 5})) == DotError.CODE_FORBIDDEN, "an actor without the cvar flag is refused")
+	_check(_code(plain.save_to_server()) == DotError.CODE_FORBIDDEN, "an actor without root cannot save to the server")
 
 
 func _w(rel: String, text: String) -> void:

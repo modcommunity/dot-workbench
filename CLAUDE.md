@@ -6,5 +6,6 @@ Admin live-edit surface over dot-core's `DotProfileRuntime`: a transport-agnosti
 
 - All profile rules (validation, revisions, audit, save) belong to `DotProfileRuntime`; do not copy them here.
 - The HTTP server is dot-core's `DotHttpServer`; `DotWorkbenchHttp` only mounts routes on it. The page is `addons/dot_workbench/web/index.html` (one file, no build); an export needs `*.html` in its include filter. The host calls `DotWorkbenchHttp.poll()` from `_process`.
+- `DotWorkbenchPanel` is the in-game panel: it binds dot-menu's `DotProfileEditorScreen` (duck-typed, so dot-ui and dot-menu stay optional) to the api, so Apply, Reset and `save_to_server()` take the same permission path as HTTP. `tools/panel_shot.gd` needs dot-ui, dot-menu and dot-settings linked into `addons/` (gitignored).
 - Secrets (admin token, TLS key) are read from files only, never env or argv.
-- Validate: `heavy -- godot --headless --path . --import`, parse every `.gd` with `--check-only`, then `heavy -- godot --headless --path . res://examples/workbench_selftest.tscn` (7 sections, 57 checks).
+- Validate: `heavy -- godot --headless --path . --import`, parse every `.gd` with `--check-only`, then `heavy -- godot --headless --path . res://examples/workbench_selftest.tscn` (8 sections, 68 checks).

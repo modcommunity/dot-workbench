@@ -13,7 +13,7 @@ dot-workbench is the admin live-edit surface on top of `DotProfileRuntime` (dot-
 1. **`DotWorkbenchApi`** (done): transport-agnostic. `handle(actor, req) -> DotResult`, `handle_json(token, text) -> String`, `authenticate(token)`, `to_reply(res)`.
 2. **HTTP adapter** (`DotWorkbenchHttp`, done, on dot-core's `DotHttpServer`): also REST routes under `/api/profiles`; maps `POST /api` (JSON body, `Authorization: Bearer <token>`) to `handle_json`, and `GET /` to the static page. Needs the shared `DotHttpServer` above.
 3. **Static page** (`web/index.html`, done): one `index.html`, hand-written CSS and plain JavaScript, no build step, no framework, no CDN, shipped inside the addon and served from memory. Modern look: system font stack, light and dark by `prefers-color-scheme`, a kind and profile picker, a table of fields with the effective value, the runtime override highlighted, inline edit with the server's validation error shown beside the field, per-field reset, a Save button that asks for confirmation.
-4. **In-game panel**: later, `DotUiForm` over the same `DotWorkbenchApi`; `DotProfileEditorScreen` (dot-menu) is wrapped or moved here.
+4. **In-game panel** (done): `DotWorkbenchPanel` binds dot-menu's `DotProfileEditorScreen` (a `DotUiForm` inside) to `DotWorkbenchApi` through the screen's save, reset and has-override hooks, so Apply writes the live runtime layer as the given actor and `save_to_server()` writes cfg/server. A multi-key Apply that fails midway restores the earlier keys. Screenshot: `docs/workbench-ingame-dark.png`.
 
 ## JSON API
 
@@ -62,7 +62,7 @@ dot-core only. dot-server (admin flags), dot-auth (identity), dot-ui and dot-men
 
 ## Not done
 
-the in-game panel here (game-playground has its own), CI workflow.
+wiring `DotWorkbenchPanel` into a game's admin menu (game-playground has its own panel), a Save-to-server button in the screen, dot-auth identity wiring, CI workflow.
 
 ## Hosting it in a game and exporting it
 
