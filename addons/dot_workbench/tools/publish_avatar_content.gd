@@ -47,6 +47,10 @@ func _main() -> void:
 		quit(2)
 		return
 
+	var site_ok := DotWorkbenchPublish.check_site(site)
+	if not site_ok.ok:
+		_fail(site_ok)
+		return
 	var token := DotWorkbenchPublish.read_token(token_file)
 	if not token.ok:
 		_fail(token)
@@ -57,7 +61,7 @@ func _main() -> void:
 		return
 	var bytes := FileAccess.get_file_as_bytes(file)
 	var http := DotHttp.new()
-	http.base_url = site.trim_suffix("/")
+	http.base_url = site_ok.value
 	http.max_retries = 0
 	http.timeout_sec = 120.0
 	root.add_child(http)

@@ -3,8 +3,8 @@ extends Node
 ## DotWorkbenchPublish, offline: token file, query checks, file checks, and the POST it sends.
 ## godot --headless --path . res://examples/publish_selftest.tscn
 
-const SECTIONS := 4
-const CHECKS := 24
+const SECTIONS := 5
+const CHECKS := 30
 const TOKEN := "tmcc_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 var _entered := 0
@@ -33,6 +33,7 @@ func _run() -> void:
 	_test_token()
 	_test_query()
 	_test_file()
+	await _test_site()
 	await _test_publish()
 	_check(_completed == _entered and _entered == SECTIONS, "every section ran (%d of %d)" % [_completed, SECTIONS])
 	_check(_passed + _failed + 1 == CHECKS, "every check ran (%d of %d)" % [_passed + _failed + 1, CHECKS])
@@ -86,6 +87,25 @@ func _test_query() -> void:
 	_check(not DotWorkbenchPublish.build_query({"kind": "avatar", "name": "x", "token": TOKEN}).ok, "an unknown field is refused")
 	_check(not DotWorkbenchPublish.build_query({"kind": "avatar", "name": "x", "sharing": "APPROVAL"}).ok, "sharing is PRIVATE or PUBLIC")
 	_check(DotWorkbenchPublish.build_query({"kind": "action", "name": "Wave", "actionKind": "GESTURE"}).ok, "an action needs no slot")
+	_completed += 1
+
+
+func _test_site() -> void:
+	_entered += 1
+	print("site")
+	_check(DotWorkbenchPublish.check_site("https://site.test/").value == "https://site.test", "https is accepted, trailing slash dropped")
+	_check(not DotWorkbenchPublish.check_site("http://site.test").ok, "plain http to a remote host is refused")
+	_check(DotWorkbenchPublish.check_site("http://localhost:3002").ok and DotWorkbenchPublish.check_site("http://127.0.0.1").ok,
+		"plain http to this machine is allowed")
+	_check(not DotWorkbenchPublish.check_site("http://localhost.evil.test").ok and not DotWorkbenchPublish.check_site("http://127.0.0.1.evil.test:80").ok,
+		"a host that only starts like localhost is refused")
+	_check(not DotWorkbenchPublish.check_site("ftp://site.test").ok and not DotWorkbenchPublish.check_site("https://").ok, "other schemes and empty hosts are refused")
+	var http := DotHttp.new()
+	http.base_url = "http://site.test"
+	add_child(http)
+	var res := await DotWorkbenchPublish.new().publish(http, "tmcc_" + "a".repeat(43), _glb(100), {"kind": "wearable", "name": "Hat", "slot": "hat"})
+	_check(not res.ok and res.error.code == DotError.CODE_INVALID, "publish refuses a client pointed at plain http")
+	http.queue_free()
 	_completed += 1
 
 

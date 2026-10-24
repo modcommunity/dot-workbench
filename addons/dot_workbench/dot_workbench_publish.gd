@@ -72,6 +72,19 @@ static func build_query(params: Dictionary) -> DotResult:
 
 
 ## Checks the bytes are a binary glTF under the kind's cap.
+## A site URL the token may be sent to: https, or plain http only to this machine (a local site).
+static func check_site(url: String) -> DotResult:
+	var u := url.strip_edges().to_lower()
+	if u.begins_with("https://") and u.length() > 8:
+		return DotResult.success(url.strip_edges().trim_suffix("/"))
+	if u.begins_with("http://"):
+		var authority := u.substr(7).split("/")[0]
+		var host := authority.substr(0, authority.find("]") + 1) if authority.begins_with("[") else authority.split(":")[0]
+		if host in ["localhost", "127.0.0.1", "[::1]"]:
+			return DotResult.success(url.strip_edges().trim_suffix("/"))
+	return DotResult.fail(DotError.CODE_INVALID, "the site must be https (plain http only to localhost)", url.left(128))
+
+
 static func check_file(kind: String, bytes: PackedByteArray) -> DotResult:
 	if bytes.size() < 20 or bytes.slice(0, 4).get_string_from_ascii() != "glTF":
 		return DotResult.fail(DotError.CODE_INVALID, "not a binary glTF (.glb)")
@@ -88,6 +101,9 @@ func publish(http: Node, token: String, bytes: PackedByteArray, params: Dictiona
 		return DotResult.fail(DotError.CODE_STATE, "no HTTP client")
 	if not is_token(token):
 		return DotResult.fail(DotError.CODE_AUTH, "not a creator token")
+	var base: Variant = http.get(&"base_url")
+	if base is String and not check_site(base).ok:
+		return check_site(base)
 	var query := build_query(params)
 	if not query.ok:
 		return query
