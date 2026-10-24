@@ -3,8 +3,8 @@ extends Node
 ## DotWorkbenchPublish, offline: token file, query checks, file checks, and the POST it sends.
 ## godot --headless --path . res://examples/publish_selftest.tscn
 
-const SECTIONS := 5
-const CHECKS := 30
+const SECTIONS := 6
+const CHECKS := 36
 const TOKEN := "tmcc_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 var _entered := 0
@@ -35,6 +35,7 @@ func _run() -> void:
 	_test_file()
 	await _test_site()
 	await _test_publish()
+	await _test_form()
 	_check(_completed == _entered and _entered == SECTIONS, "every section ran (%d of %d)" % [_completed, SECTIONS])
 	_check(_passed + _failed + 1 == CHECKS, "every check ran (%d of %d)" % [_passed + _failed + 1, CHECKS])
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -138,5 +139,48 @@ func _test_publish() -> void:
 	_check(not res.ok and res.error.http_status == 403, "a refusal keeps its status")
 	http.reply = DotResult.success({"body_text": "<html>"})
 	_check(not (await pub.publish(http, TOKEN, _glb(500), params)).ok, "a reply without an id fails")
+	http.queue_free()
+	_completed += 1
+
+
+func _test_form() -> void:
+	_entered += 1
+	print("make wearable form")
+	var dir := "user://wb_form_test"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var glb := FileAccess.open(dir + "/hat.glb", FileAccess.WRITE)
+	glb.store_buffer(_glb(300))
+	glb.close()
+	var tok := FileAccess.open(dir + "/token", FileAccess.WRITE)
+	tok.store_string(TOKEN + "\n")
+	tok.close()
+	var http := FakeHttp.new()
+	add_child(http)
+	var form := DotWorkbenchWearableForm.new()
+	form.token_path = dir + "/token"
+	form.http = http
+	add_child(form)
+	var statuses: Array = []
+	form.status.connect(func(t: String, bad: bool) -> void: statuses.append([t, bad]))
+	form.set_values(dir + "/hat.glb", "Top hat", "hat", "CC0-1.0")
+	var res: DotResult = await form.submit()
+	var call: Dictionary = http.calls[0] if http.calls.size() > 0 else {}
+	_check(res.ok and String(call.get("path", "")).contains("slot=hat") and call.get("size") == 300, "the form posts the chosen file and slot")
+	_check(statuses.size() == 1 and not statuses[0][1] and String(statuses[0][0]).contains("#7"), "success is reported with the id")
+	form.set_values(dir + "/hat.glb", "Top hat", "hat", "MIT")
+	res = await form.submit()
+	_check(not res.ok and http.calls.size() == 1 and statuses[1][1], "a licence needing credit is refused before any upload")
+	form.set_values(dir + "/missing.glb", "Top hat", "hat", "CC0-1.0")
+	res = await form.submit()
+	_check(not res.ok and http.calls.size() == 1, "a missing file sends nothing")
+	form.set_values(dir + "/hat.glb", "Top hat", "face", "CC0-1.0")
+	form.set_token_file(dir + "/none")
+	res = await form.submit()
+	_check(not res.ok and http.calls.size() == 1, "a missing token file sends nothing")
+	var overlay_ok := true
+	if ResourceLoader.exists(DotWorkbenchOverlay.EDITOR_SCRIPT):
+		overlay_ok = DotWorkbenchOverlay.create(DotWorkbenchApi.new(), null) != null
+	_check(overlay_ok, "the overlay builds with the form in it")
+	form.queue_free()
 	http.queue_free()
 	_completed += 1

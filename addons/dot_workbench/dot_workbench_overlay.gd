@@ -21,6 +21,7 @@ var last_export: Dictionary = {}
 var _status: Label
 var _import_box: TextEdit
 var _import_row: Control
+var wearable_form: DotWorkbenchWearableForm
 
 
 ## Builds the window, or null when dot-menu or dot-ui is not linked. [param labels] is {kind: heading}.
@@ -55,6 +56,10 @@ func _build(labels: Dictionary) -> void:
 	_import_row = _build_import()
 	_import_row.visible = false
 	col.add_child(_import_row)
+	wearable_form = DotWorkbenchWearableForm.new()
+	wearable_form.visible = false
+	wearable_form.status.connect(_say)
+	col.add_child(wearable_form)
 	col.add_child(editor)
 	for kind in api.kinds():
 		var set := api.get_set(kind)
@@ -90,6 +95,7 @@ func _bar() -> Control:
 	row.add_child(_button("Save to server", _on_save, "Writes the open profile's edits to cfg/server"))
 	row.add_child(_button("Export changes as defaults", _on_export, "Writes only what differs from the shipped defaults, in cfg/ layout"))
 	row.add_child(_button("Import", _on_import_toggle, "Apply a received export"))
+	row.add_child(_button("Make wearable", _on_wearable_toggle, "Publish a GLB as a wearable with a creator token"))
 	row.add_child(_button("Close", close, ""))
 	return wrap
 
@@ -150,6 +156,10 @@ func _on_export() -> void:
 	DisplayServer.clipboard_set(res.value["bundle"])
 	var shown := ProjectSettings.globalize_path(res.value["dir"])
 	_say("Exported %d files to %s (zip beside it, text on the clipboard)" % [res.value["files"].size() - 1, shown], false)
+
+
+func _on_wearable_toggle() -> void:
+	wearable_form.visible = not wearable_form.visible
 
 
 func _on_import_toggle() -> void:
