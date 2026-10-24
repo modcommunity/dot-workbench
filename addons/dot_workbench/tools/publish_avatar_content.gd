@@ -2,8 +2,8 @@ extends SceneTree
 
 ## Publishes one GLB to the site with a creator token (made on the site's Avatars > Wearables tab).
 ## godot --headless --path . --script res://addons/dot_workbench/tools/publish_avatar_content.gd -- \
-##     --site https://example.org --token-file ~/.config/tmc/creator.token --file hat.glb \
-##     kind=wearable name="Top hat" slot=hat licence=CC0-1.0
+##     --site https://example.org --token-file ~/.config/tmc/creator-token --file hat.glb \
+##     --kind wearable --name "Top hat" --slot hat --licence CC0-1.0     (or kind=wearable ...)
 ## Prints the site's reply as JSON; exits 1 on failure. The token is read from a file only.
 
 
@@ -29,6 +29,10 @@ func _main() -> void:
 				"--site": site = args[i + 1]
 				"--token-file": token_file = args[i + 1].replace("~", OS.get_environment("HOME"))
 				"--file": file = args[i + 1]
+			i += 2
+			continue
+		if a.begins_with("--") and DotWorkbenchPublish.FIELDS.has(a.substr(2)) and i + 1 < args.size():
+			params[a.substr(2)] = args[i + 1]
 			i += 2
 			continue
 		if a.contains("="):
@@ -72,4 +76,4 @@ func _fail(res: DotResult) -> void:
 
 
 func _usage() -> String:
-	return "usage: -- --site URL --token-file PATH --file MODEL.glb kind=wearable|action|avatar name=NAME [slot= bone= licence= credit= source= sharing=PRIVATE|PUBLIC description= id= actionKind= loop=1]"
+	return "usage: -- --site URL --token-file PATH --file MODEL.glb --kind wearable|action|avatar --name NAME [--slot --bone --licence --credit --source --sharing PRIVATE|PUBLIC --description --id --actionKind --loop 1] (each also as key=value)"
