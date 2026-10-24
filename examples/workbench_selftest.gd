@@ -6,9 +6,10 @@ extends Node
 ## godot --headless --path . res://examples/workbench_selftest.tscn
 ## [/codeblock]
 
-const SECTIONS := 9
-const CHECKS := 81
+const SECTIONS := 10
+const CHECKS := 95
 const BASE := "user://workbench_selftest"
+const OUT := "user://workbench_selftest_out"
 
 var _passed := 0
 var _failed := 0
@@ -28,6 +29,7 @@ func _ready() -> void:
 	_test_http()
 	_test_panel()
 	_test_identity()
+	_test_export()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -365,3 +367,47 @@ func _test_identity() -> void:
 	_check(not gate.permit("id:backbone:u", "cvar") and not gate.permit("stranger", "cvar"), "an actor the gate did not admit holds nothing")
 	gate.fallback_permit = func(uid: String, flag: String) -> bool: return uid == "backbone:a" and flag == "cvar"
 	_check(api.handle(ok.value, _req("set", "npc", "zombie", "health", 13)).ok and _code(api.handle(ok.value, _req("save"))) == DotError.CODE_FORBIDDEN, "a fallback permit decides the flags instead")
+
+
+func _test_export() -> void:
+	_section("export changes as defaults, and import")
+	var api := _api()
+	var a := DotWorkbenchApi.TOKEN_ACTOR
+	var ex := DotWorkbenchExport.new(api)
+	ex.root = OUT
+	_check(ex.export_changes("t0").error.code == DotError.CODE_STATE, "nothing edited: no export")
+	var _r1 := api.handle(a, _req("set", "npc", "zombie", "health", 400))
+	var _r2 := api.handle(a, _req("set", "npc", "zombie", "speed", 2.5))
+	var _r3 := api.handle(a, _req("set", "npc", "ghoul", "mode", "ranged"))
+	var files := ex.collect()
+	_check(files.size() == 2, "only profiles with a real difference are written (speed 2.5 equals the shipped value)")
+	var zf: String = files.get("cfg/game/mygame/npc/zombie.yml", "")
+	_check(zf == "health: 400\n", "the yml holds just the changed key, in the cfg layout")
+	var _r4 := api.handle(a, _req("set", "npc", "zombie", "health", 50))
+	_check(not ex.collect().has("cfg/game/mygame/npc/zombie.yml"), "an edit set back to the shipped value drops out")
+	var _r5 := api.handle(a, _req("set", "npc", "zombie", "health", 400))
+	var done := ex.export_changes("t1")
+	_check(done.ok and FileAccess.file_exists(OUT.path_join("t1/cfg/game/mygame/npc/ghoul.yml")), "export writes the folder")
+	_check(done.ok and FileAccess.file_exists(OUT.path_join("t1.zip")), "export writes the zip")
+	var bundle: String = done.value["bundle"]
+	_check(bundle.contains("# ---- file: cfg/game/mygame/npc/zombie.yml"), "the clipboard bundle names each file")
+	# a fresh api (a second machine) takes the diff back
+	var api2 := _api()
+	var ex2 := DotWorkbenchExport.new(api2)
+	var imp := ex2.import_source(a, bundle)
+	_check(imp.ok and imp.value["applied"] == 2, "import of the bundle applies both keys")
+	_check(api2.handle(a, _req("get", "npc", "zombie")).value["runtime"] == {"health": 400}, "import lands in the runtime layer")
+	var api3 := _api()
+	var imp2 := DotWorkbenchExport.new(api3).import_source(a, OUT.path_join("t1.zip"))
+	_check(imp2.ok and imp2.value["applied"] == 2, "import of the zip works")
+	var api4 := _api()
+	var imp3 := DotWorkbenchExport.new(api4).import_source(a, OUT.path_join("t1"))
+	_check(imp3.ok and imp3.value["applied"] == 2, "import of the folder works")
+	var bad := DotWorkbenchExport.new(_api()).import_files(a, {"cfg/game/mygame/npc/zombie.yml": "health: 99999\n", "cfg/addons/other/npc/x.yml": "health: 1\n"})
+	_check(bad.ok and bad.value["applied"] == 0 and bad.value["skipped"].size() == 2, "out-of-range values and foreign files are skipped, not applied")
+	var api5 := _api()
+	api5.permit = Callable()
+	var denied := DotWorkbenchExport.new(api5).import_files("nobody", {"cfg/game/mygame/npc/zombie.yml": "health: 5\n"})
+	_check(not denied.ok and denied.error.code == DotError.CODE_FORBIDDEN, "import needs the edit permission")
+	ex.cvars_provider = func() -> Dictionary: return {"arena_scorelimit": 30}
+	_check(ex.collect().get("game-cvars.yml", "") == "cvars:\n  arena_scorelimit: 30\n", "changed cvars come out as a game.yml block")

@@ -25,6 +25,8 @@ var runtime: DotProfileRuntime
 var _token := ""
 var _inner_permit: Callable = Callable()
 var _sets: Dictionary = {}
+## "kind/id" -> {dotted path: value before the first edit of this session}.
+var _baseline: Dictionary = {}
 
 
 func _init(p_runtime: DotProfileRuntime = null) -> void:
@@ -69,7 +71,34 @@ func handle(actor: Variant, req: Dictionary) -> DotResult:
 	for k in ["kind", "id", "key"]:
 		if req.has(k) and not (req[k] is String):
 			return DotResult.fail(DotError.CODE_INVALID, "'%s' must be a string" % k)
-	return runtime.handle_request(actor, req)
+	var before: Variant = _value_before(req)
+	var res := runtime.handle_request(actor, req)
+	if res.ok and before != null and not (res.value is Dictionary and res.value.get("changed", true) == false):
+		var bkey := "%s/%s" % [req["kind"], req["id"]]
+		if not _baseline.has(bkey):
+			_baseline[bkey] = {}
+		if not (_baseline[bkey] as Dictionary).has(req["key"]):
+			_baseline[bkey][req["key"]] = before[0]
+	return res
+
+
+## The shipped value of [param path] before this session's first edit, for "export changes as defaults":
+## Dictionary {found: bool, value}. Falls back to the profile without its runtime layer.
+func baseline_value(kind: String, id: String, path: String) -> Dictionary:
+	var rec: Dictionary = _baseline.get("%s/%s" % [kind, id], {})
+	if rec.has(path):
+		return {"found": true, "value": rec[path]}
+	return _lookup_without_runtime(kind, id, path)
+
+
+## The kinds registered with [method add_set].
+func kinds() -> Array:
+	return _sets.keys()
+
+
+## The set behind [param kind], or null.
+func get_set(kind: String) -> DotProfileSet:
+	return _sets.get(kind)
 
 
 ## Turns a result into the wire reply: {ok: true, value} or {ok: false, error: {code, message}}.
@@ -89,6 +118,36 @@ func handle_json(token: String, text: String) -> String:
 	if not (parsed is Dictionary):
 		return JSON.stringify(to_reply(DotResult.fail(DotError.CODE_INVALID, "body must be a JSON object")))
 	return JSON.stringify(to_reply(handle(auth.value, parsed)))
+
+
+## `[value]` of a `set` request's path as it is now (without the runtime layer), or null when not a set.
+func _value_before(req: Dictionary) -> Variant:
+	if str(req.get("op", "")) != "set" or not req.has("key"):
+		return null
+	var found := _lookup_without_runtime(str(req.get("kind", "")), str(req.get("id", "")), str(req["key"]))
+	return [found["value"]] if found["found"] else null
+
+
+func _lookup_without_runtime(kind: String, id: String, path: String) -> Dictionary:
+	if not _sets.has(kind) or not (_sets[kind] as DotProfileSet).has_id(id):
+		return {"found": false, "value": null}
+	var set: DotProfileSet = _sets[kind]
+	var held := set.runtime_paths(id)
+	set.set_runtime(id, {})
+	var loaded := set.load_profile(id)
+	set.set_runtime(id, held)
+	if not loaded.ok:
+		return {"found": false, "value": null}
+	var d: Dictionary = (loaded.value as DotProfile).to_dictionary()
+	var tree: Dictionary = (d["values"] as Dictionary).duplicate(true)
+	tree["extra"] = d["extra"]
+	var parts := path.split(".")
+	var node: Variant = tree
+	for part in parts:
+		if not (node is Dictionary) or not (node as Dictionary).has(part):
+			return {"found": false, "value": null}
+		node = node[part]
+	return {"found": true, "value": node}
 
 
 func _permit(actor: Variant, flag: String) -> bool:

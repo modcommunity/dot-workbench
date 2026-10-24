@@ -31,16 +31,10 @@ func _run() -> void:
 	api.add_set(s)
 	root.get_window().size = Vector2i(1280, 800)
 	await _frames(3)
-	var tokens := DotFormTokens.dark()
-	tokens.animate = false
-	var ed := DotProfileEditorScreen.new()
-	ed.tokens = tokens
-	ed.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.add_child(ed)
-	ed.add_set(s, "NPCs")
-	var panel := DotWorkbenchPanel.new(api, "admin")
 	api.permit = func(actor: Variant, _f: String) -> bool: return actor == "admin"
-	panel.attach(ed)
+	var ov := DotWorkbenchOverlay.create(api, "admin", {"npc": "NPCs"})
+	root.add_child(ov)
+	var ed: DotProfileEditorScreen = ov.editor
 	await _frames(3)
 	var _o := ed.open("npc", "zombie")
 	await _frames(2)
@@ -49,6 +43,8 @@ func _run() -> void:
 	await _frames(1)
 	var _c := ed.form.set_value("speed", 4.5)
 	await _frames(4)
+	ov.exporter.root = BASE.path_join("out")
+	ov._on_export()
 	print("rev ", api.runtime.revision("npc", "zombie"), " override ", s.runtime_paths("zombie"))
 	root.get_texture().get_image().save_png(ProjectSettings.globalize_path("res://docs/workbench-ingame-dark.png"))
 	quit(0)
