@@ -4,6 +4,8 @@ Admin live-edit surface over dot-core's `DotProfileRuntime`: a transport-agnosti
 
 **The distributable is `addons/dot_workbench/`.** `project.godot` and `examples/` exist to validate it alone. It requires dot-core (`ln -s ../../dot-core/addons/dot_core addons/dot_core`); everything else is duck-typed.
 
+Also requires **dot-profile** (`DotProfileSet`, `DotProfile`, `DotProfileRuntime`, split from dot-core): link `addons/dot_profile` next to `addons/dot_core`.
+
 - All profile rules (validation, revisions, audit, save) belong to `DotProfileRuntime`; do not copy them here.
 - The HTTP server is dot-core's `DotHttpServer`; `DotWorkbenchHttp` only mounts routes on it. The page is `addons/dot_workbench/web/index.html` (one file, no build); an export needs `*.html` in its include filter. The host calls `DotWorkbenchHttp.poll()` from `_process`.
 - `DotWorkbenchPanel` is the in-game panel: it binds dot-menu's `DotProfileEditorScreen` (duck-typed, so dot-ui and dot-menu stay optional) to the api, so Apply, Reset and `save_to_server()` take the same permission path as HTTP. `tools/panel_shot.gd` needs dot-ui, dot-menu and dot-settings linked into `addons/` (gitignored).
