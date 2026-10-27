@@ -150,7 +150,7 @@ func _on_envelope(req: DotHttpRequest) -> DotHttpResponse:
 	return _reply(api.handle(auth.value, body.value))
 
 
-# REST sugar over the same ops: /api/profiles[/kind[/id[/key]]] and /api/profiles/save/kind/id.
+# REST sugar over the same ops: /api/profiles[/kind[/id[/key]]] and POST /api/profiles/{save,add,delete}/kind/id.
 func _on_profiles(req: DotHttpRequest) -> DotHttpResponse:
 	var auth: Variant = _gate(req)
 	if auth is DotHttpResponse:
@@ -179,9 +179,11 @@ func _on_profiles(req: DotHttpRequest) -> DotHttpResponse:
 				return DotHttpResponse.error(404)
 			op = {"op": "reset_key" if seg.size() == 3 else "reset", "kind": seg[0], "id": seg[1], "key": _at(seg, 2)}
 		"POST":
-			if seg.size() != 3 or seg[0] != "save":
+			if seg.size() != 3 or not ["save", "add", "delete"].has(seg[0]):
 				return DotHttpResponse.error(404)
-			op = {"op": "save", "kind": seg[1], "id": seg[2]}
+			op = {"op": seg[0], "kind": seg[1], "id": seg[2]}
+			if seg[0] == "add" and body.has("value"):
+				op["value"] = body["value"]
 	return _reply(api.handle(auth.value, op))
 
 

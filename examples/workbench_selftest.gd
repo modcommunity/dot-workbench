@@ -6,8 +6,8 @@ extends Node
 ## godot --headless --path . res://examples/workbench_selftest.tscn
 ## [/codeblock]
 
-const SECTIONS := 10
-const CHECKS := 95
+const SECTIONS := 11
+const CHECKS := 106
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -30,6 +30,7 @@ func _ready() -> void:
 	_test_panel()
 	_test_identity()
 	_test_export()
+	_test_add_delete()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -277,6 +278,30 @@ func _test_panel() -> void:
 	plain.attach(scr2)
 	_check(_code(scr2.save_target.call(set, "zombie", {"health": 5})) == DotError.CODE_FORBIDDEN, "an actor without the cvar flag is refused")
 	_check(_code(plain.save_to_server()) == DotError.CODE_FORBIDDEN, "an actor without root cannot save to the server")
+
+
+func _test_add_delete() -> void:
+	_section("profiles are added and deleted through the api and the panel")
+	var api := _api()
+	var a := DotWorkbenchApi.TOKEN_ACTOR
+	var set: DotProfileSet = api._sets["npc"]
+	var r := api.handle(a, _req("add", "npc", "wraith", "", {"health": 90}))
+	_check(r.ok and api.handle(a, _req("list", "npc")).value["ids"].has("wraith"), "add through the api lists the new profile")
+	_check(api.handle(a, _req("get", "npc", "wraith")).value["values"]["health"] == 90, "and it carries the start values")
+	_check(_code(api.handle(a, _req("add", "npc", "wraith"))) == DotError.CODE_INVALID, "a taken id is refused")
+	var envelope: Variant = JSON.parse_string(api.handle_json("s3cret", JSON.stringify({"op": "delete", "kind": "npc", "id": "wraith"})))
+	_check(envelope != null and envelope.get("ok", false) and not set.has_id("wraith"), "delete through the json envelope removes it")
+	_check(not api.handle(a, _req("list", "npc")).value["ids"].has("wraith"), "and it no longer lists")
+	var scr := FakeScreen.new()
+	var panel := DotWorkbenchPanel.new(api, a)
+	panel.attach(scr)
+	_check(panel.add_profile("npc", "golem", {"health": 500}).ok and set.has_id("golem"), "the panel adds a profile")
+	_check(panel.delete_profile("npc", "golem").ok and not set.has_id("golem"), "the panel deletes it")
+	_check(panel.delete_profile("npc", "ghoul").ok and not set.list_ids().has("ghoul"), "the panel deletes a shipped profile too")
+	_check(_code(panel.delete_profile("npc", "ghoul")) == DotError.CODE_INVALID, "deleting it twice is refused")
+	var plain := DotWorkbenchPanel.new(api, "nobody")
+	_check(_code(plain.add_profile("npc", "x")) == DotError.CODE_FORBIDDEN and _code(plain.delete_profile("npc", "zombie")) == DotError.CODE_FORBIDDEN, "an actor without the cvar flag can do neither")
+	_check(api.handle(a, _req("get", "npc", "zombie")).ok, "the others are untouched")
 
 
 func _w(rel: String, text: String) -> void:

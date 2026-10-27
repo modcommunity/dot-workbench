@@ -48,6 +48,20 @@ func save_to_server() -> DotResult:
 	return res
 
 
+## Makes a new profile [param id] of [param kind], starting from [param start] (`{path: value}`). Needs the cvar flag.
+func add_profile(kind: String, id: String, start: Dictionary = {}) -> DotResult:
+	var res := api.handle(actor, {"op": "add", "kind": kind, "id": id, "value": start})
+	status.emit("Added %s/%s" % [kind, id] if res.ok else res.error.message, not res.ok)
+	return res
+
+
+## Deletes profile [param id] of [param kind]: its server-tier file goes, and a shipped one is hidden. Needs the cvar flag.
+func delete_profile(kind: String, id: String) -> DotResult:
+	var res := api.handle(actor, {"op": "delete", "kind": kind, "id": id})
+	status.emit("Deleted %s/%s" % [kind, id] if res.ok else res.error.message, not res.ok)
+	return res
+
+
 func _save_changes(set: DotProfileSet, id: String, changes: Dictionary) -> DotResult:
 	var before := set.runtime_paths(id)
 	var done: Array = []
