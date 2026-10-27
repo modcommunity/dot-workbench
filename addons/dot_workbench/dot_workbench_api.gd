@@ -14,6 +14,8 @@ var read_flag := "cvar"
 var token_flags := PackedStringArray(["cvar", "root"])
 ## Optional Callable(token) -> actor or null, for dot-auth style identities (duck-typed).
 var identity: Callable = Callable()
+## Optional Callable(req) called with each write request this api applied, to repeat it elsewhere: a client's panel edits its local copy and forwards here to the server, which checks it again.
+var forward: Callable = Callable()
 
 ## The host's Callable(actor, flag) -> bool (dot-server's DotAdminManager); set it here, not on the runtime.
 var permit: Callable = Callable():
@@ -73,6 +75,8 @@ func handle(actor: Variant, req: Dictionary) -> DotResult:
 			return DotResult.fail(DotError.CODE_INVALID, "'%s' must be a string" % k)
 	var before: Variant = _value_before(req)
 	var res := runtime.handle_request(actor, req)
+	if res.ok and forward.is_valid():
+		forward.call(req)
 	if res.ok and before != null and not (res.value is Dictionary and res.value.get("changed", true) == false):
 		var bkey := "%s/%s" % [req["kind"], req["id"]]
 		if not _baseline.has(bkey):
