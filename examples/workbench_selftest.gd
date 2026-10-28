@@ -6,8 +6,8 @@ extends Node
 ## godot --headless --path . res://examples/workbench_selftest.tscn
 ## [/codeblock]
 
-const SECTIONS := 11
-const CHECKS := 106
+const SECTIONS := 12
+const CHECKS := 114
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -31,6 +31,7 @@ func _ready() -> void:
 	_test_identity()
 	_test_export()
 	_test_add_delete()
+	_test_schema_field()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -302,6 +303,33 @@ func _test_add_delete() -> void:
 	var plain := DotWorkbenchPanel.new(api, "nobody")
 	_check(_code(plain.add_profile("npc", "x")) == DotError.CODE_FORBIDDEN and _code(plain.delete_profile("npc", "zombie")) == DotError.CODE_FORBIDDEN, "an actor without the cvar flag can do neither")
 	_check(api.handle(a, _req("get", "npc", "zombie")).ok, "the others are untouched")
+
+
+func _test_schema_field() -> void:
+	_section("a schema field shows in the editor form with its range, unwired")
+	_clean()
+	_w("addons/dot-weapon/weapon/pistol.yml", "")
+	var s := DotProfileSet.create("dot-weapon", "mygame", "weapon", [
+		DotProfileSet.field("crosshair_scale", "float", 0.0, {"min": 0.0, "max": 4.0}),
+	])
+	s.roots = PackedStringArray([BASE])
+	var api := DotWorkbenchApi.new()
+	api.runtime.save_root = BASE
+	api.add_set(s)
+	api.set_admin_token("s3cret")
+	var a := DotWorkbenchApi.TOKEN_ACTOR
+	var form := DotUiForm.new()
+	var built := form.build(s.schema, api.handle(a, _req("get", "weapon", "pistol")).value["values"])
+	_check(built.ok, "the form builds from the set's schema alone")
+	var row: DotFormRow = form.row("crosshair_scale")
+	_check(row != null, "crosshair_scale has a row without any wiring")
+	_check(row != null and is_equal_approx(float(row.field["min"]), 0.0) and is_equal_approx(float(row.field["max"]), 4.0), "the row carries the range 0 to 4")
+	_check(row != null and row.field["slider"] == true and row._slider != null, "a ranged float gets a slider")
+	_check(api.handle(a, _req("set", "weapon", "pistol", "crosshair_scale", 1.5)).ok, "an in-range value is accepted")
+	_check(_code(api.handle(a, _req("set", "weapon", "pistol", "crosshair_scale", 5.0))) == DotError.CODE_INVALID, "a value above the range is refused")
+	_check(form.set_value("crosshair_scale", 2.0).ok and not form.set_value("crosshair_scale", 9.0).ok, "the form refuses a value outside the range")
+	form.free()
+	_check(api.handle(a, _req("get", "weapon", "pistol")).value["values"]["crosshair_scale"] == 1.5, "the refused edit left the live value")
 
 
 func _w(rel: String, text: String) -> void:
