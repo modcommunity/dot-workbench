@@ -182,6 +182,9 @@ func _http_call(h: DotWorkbenchHttp, method: String, path: String, token: String
 
 func _test_http() -> void:
 	_section("HTTP adapter")
+	if not DotPlatform.can_listen():
+		_line("  skipped: this platform cannot listen on a socket (the checks below are desktop only)")
+		return
 	var api := _api()
 	var h := DotWorkbenchHttp.new(api)
 	var off := h.start_from_config({"enabled": false})
@@ -196,7 +199,8 @@ func _test_http() -> void:
 	var page := _http_call(h, "GET", "/", "")
 	_check(page["status"] == 200 and str(page["text"]).contains("<title>Workbench</title>"), "the page is served without a token")
 	_check(_http_call(h, "GET", "/api/profiles", "")["status"] == 401, "no token is 401")
-	_check(_http_call(h, "GET", "/api/profiles", "wrong")["status"] == 401, "a wrong token is 401")
+	var wrong := _http_call(h, "GET", "/api/profiles", "wrong")
+	_check(wrong["status"] == 401 and not str(wrong["text"]).contains("wrong") and not str(wrong["text"]).contains("s3cret"), "a wrong token is 401 and the reply echoes no token")
 	var kinds := _http_call(h, "GET", "/api/profiles")
 	_check(kinds["status"] == 200 and kinds["json"]["value"]["kinds"] == ["npc"], "GET /api/profiles lists kinds")
 	var ids := _http_call(h, "GET", "/api/profiles/npc")
