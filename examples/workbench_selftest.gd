@@ -6,8 +6,8 @@ extends Node
 ## godot --headless --path . res://examples/workbench_selftest.tscn
 ## [/codeblock]
 
-const SECTIONS := 12
-const CHECKS := 114
+const SECTIONS := 13
+const CHECKS := 121
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -27,6 +27,7 @@ func _ready() -> void:
 	_test_bad_input()
 	_test_json()
 	_test_http()
+	_test_extension()
 	_test_panel()
 	_test_identity()
 	_test_export()
@@ -243,6 +244,38 @@ func _test_http() -> void:
 	for i in 5:
 		_http_call(h, "GET", "/api/profiles", "bad")
 	_check(_http_call(h, "GET", "/api/profiles")["status"] == 200, "max_failures 0 disables the limit")
+	h.stop()
+
+
+func _test_extension() -> void:
+	_section("extension routes")
+	if not DotPlatform.can_listen():
+		_line("  skipped: this platform cannot listen on a socket")
+		return
+	var api := _api()
+	var h := DotWorkbenchHttp.new(api)
+	var seen := []
+	h.mount_extension("/api/things", func(actor: Variant, req: DotHttpRequest) -> DotResult:
+		seen.append([actor, req.method, req.rest])
+		return DotResult.success({"echo": req.rest.trim_prefix("/")}), "thing", PackedStringArray(["GET", "POST"]))
+	_w("ext.token", "s3cret")
+	var res := h.start_from_config({"enabled": true, "port": 0, "token_file": BASE + "/ext.token"})
+	if not res.ok:
+		for i in 7:
+			_check(false, "adapter did not start")
+		return
+	_check(_http_call(h, "GET", "/api/things", "")["status"] == 401, "an extension route needs the bearer token")
+	_check(_http_call(h, "GET", "/api/things/a")["status"] == 403 and seen.is_empty(), "a flag the token lacks is 403 and the handler is not called")
+	api.add_flag("thing")
+	api.add_flag("thing")
+	_check(api.token_flags.count("thing") == 1, "add_flag is idempotent")
+	var ok := _http_call(h, "GET", "/api/things/a")
+	_check(ok["status"] == 200 and ok["json"]["value"]["echo"] == "a", "once the token holds the flag the handler answers")
+	_check(seen.size() == 1 and seen[0][0] == DotWorkbenchApi.TOKEN_ACTOR and seen[0][1] == "GET", "the handler is given the actor and the request")
+	_check(_http_call(h, "DELETE", "/api/things/a")["status"] != 200, "a method outside the mounted list is not routed")
+	for i in 5:
+		_http_call(h, "GET", "/api/things", "bad")
+	_check(_http_call(h, "GET", "/api/things")["status"] == 429, "the profile routes' lockout covers extension routes")
 	h.stop()
 
 

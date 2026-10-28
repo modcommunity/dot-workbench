@@ -11,7 +11,7 @@ const OP_GET := "get"
 ## Flag a caller needs for list and get; edits use the runtime's own edit_flag and save_flag.
 var read_flag := "cvar"
 ## Flags the admin token holds; the token is a full admin by default.
-var token_flags := PackedStringArray(["cvar", "root", "trail"])
+var token_flags := PackedStringArray(["cvar", "root"])
 ## Optional Callable(token) -> actor or null, for dot-auth style identities (duck-typed).
 var identity: Callable = Callable()
 ## Optional Callable(req) called with each write request this api applied, to repeat it elsewhere: a client's panel edits its local copy and forwards here to the server, which checks it again.
@@ -154,7 +154,13 @@ func _lookup_without_runtime(kind: String, id: String, path: String) -> Dictiona
 	return {"found": true, "value": node}
 
 
-## True when [param actor] holds [param flag] (the token's flags, or the host's permit callable). For extensions such as [DotWorkbenchTrails].
+## Lets the admin token hold [param flag], for an extension that gates its own routes on it. Idempotent.
+func add_flag(flag: String) -> void:
+	if not token_flags.has(flag):
+		token_flags.append(flag)
+
+
+## True when [param actor] holds [param flag] (the token's flags, or the host's permit callable). For extensions mounted with [method DotWorkbenchHttp.mount_extension].
 func permits(actor: Variant, flag: String) -> bool:
 	return _permit(actor, flag)
 
