@@ -8,6 +8,8 @@ const PAGE := "res://addons/dot_workbench/web/index.html"
 
 var api: DotWorkbenchApi
 var server := DotHttpServer.new()
+## Set by [method mount_trails].
+var trails: DotWorkbenchTrails = null
 ## Override to serve a different page; loaded once at start.
 var page_path := PAGE
 
@@ -30,6 +32,13 @@ func _init(p_api: DotWorkbenchApi = null) -> void:
 	server.route("POST", "/api", _on_envelope)
 	for m in ["GET", "PUT", "DELETE", "POST"]:
 		server.route_prefix(m, "/api/profiles", _on_profiles)
+
+
+## Adds the trail routes: GET /api/trails, POST /api/trails (the upload), DELETE /api/trails/<id>. Same bearer token and lockout as the profile routes; the flag `trail` is checked per request.
+func mount_trails(p_trails: DotWorkbenchTrails) -> void:
+	trails = p_trails
+	for m in ["GET", "DELETE", "POST"]:
+		server.route_prefix(m, "/api/trails", _on_trails)
 
 
 ## Reads the `workbench:` block of cfg/server.yml (defaults when absent).
@@ -185,6 +194,26 @@ func _on_profiles(req: DotHttpRequest) -> DotHttpResponse:
 			if seg[0] == "add" and body.has("value"):
 				op["value"] = body["value"]
 	return _reply(api.handle(auth.value, op))
+
+
+func _on_trails(req: DotHttpRequest) -> DotHttpResponse:
+	var auth: Variant = _gate(req)
+	if auth is DotHttpResponse:
+		return auth
+	var op := {}
+	var id := req.rest.strip_edges().trim_prefix("/")
+	match req.method:
+		"GET":
+			op = {"op": DotWorkbenchTrails.OP_LIST}
+		"DELETE":
+			op = {"op": DotWorkbenchTrails.OP_DELETE, "id": id}
+		"POST":
+			var parsed := req.json_body()
+			if not parsed.ok or not (parsed.value is Dictionary):
+				return _reply(DotResult.fail(DotError.CODE_INVALID, "body must be a JSON object"))
+			op = (parsed.value as Dictionary).duplicate()
+			op["op"] = DotWorkbenchTrails.OP_UPLOAD
+	return _reply(trails.handle(auth.value, op))
 
 
 static func _at(seg: PackedStringArray, i: int) -> String:
