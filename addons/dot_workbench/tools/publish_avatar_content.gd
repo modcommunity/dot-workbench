@@ -1,10 +1,7 @@
 extends SceneTree
 
-## Publishes one GLB to the site with a creator token (made on the site's Avatars > Wearables tab).
-## godot --headless --path . --script res://addons/dot_workbench/tools/publish_avatar_content.gd -- \
-##     --site https://example.org --token-file ~/.config/tmc/creator-token --file hat.glb \
-##     --kind wearable --name "Top hat" --slot hat --licence CC0-1.0     (or kind=wearable ...)
-## Prints the site's reply as JSON; exits 1 on failure. The token is read from a file only.
+## Publishes one GLB to the site with a creator token; prints the reply as JSON, exits 1 on failure.
+## Usage: --script <this file> -- --site URL --token-file F --file hat.glb --kind wearable --name N --slot S --licence L
 
 
 func _init() -> void:

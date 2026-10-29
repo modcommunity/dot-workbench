@@ -1,19 +1,9 @@
 class_name DotWorkbenchPublish
 extends RefCounted
 
-## Publishes a GLB (a wearable, an action or an avatar) to the site with a creator token: one
-## POST of the raw file to [code]/api/avatar/v1/publish[/code], the same path the site's form saves
-## through, so validation and moderation are the site's.
-##
-## [codeblock]
-## var pub := DotWorkbenchPublish.new()
-## var token := DotWorkbenchPublish.read_token("user://creator.token")   # a file, never env or argv
-## var res := await pub.publish(http, token.value, glb_bytes, {"kind": "wearable", "name": "Top hat",
-##         "slot": "hat", "licence": "CC0-1.0"})
-## # res.value: {id, held, url}
-## [/codeblock]
-##
-## CLI: [code]godot --headless --path . --script res://addons/dot_workbench/tools/publish_avatar_content.gd -- --help[/code]
+## Publishes a GLB to the site with a creator token, through the site's own publish path.
+## Usage: [code]await DotWorkbenchPublish.new().publish(http, token, glb_bytes, {kind, name, slot, licence})[/code]
+## returns {id, held, url}; read the token with read_token from a file, never env or argv.
 
 const CHANNEL := "workbench.publish"
 const PATH := "/api/avatar/v1/publish"

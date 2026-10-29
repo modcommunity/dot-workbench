@@ -2,14 +2,8 @@ class_name DotWorkbenchPanel
 extends RefCounted
 
 ## Binds an in-game profile editor screen (dot-menu's DotProfileEditorScreen, duck-typed) to a [DotWorkbenchApi].
-##
-## Edits then go through the same permission, validation, revision and audit path as the HTTP page: Apply
-## writes the runtime layer, Reset drops it, [method save_to_server] writes the server tier.
-##
-## [codeblock]
-## var panel := DotWorkbenchPanel.new(api, my_admin_uid)
-## panel.attach(editor_screen)   # the screen needs the api's sets added with add_set
-## [/codeblock]
+## Edits take the HTTP page's permission, validation and audit path.
+## Usage: [code]DotWorkbenchPanel.new(api, admin_uid).attach(editor_screen)[/code], after add_set on the screen.
 
 signal status(text: String, bad: bool)
 

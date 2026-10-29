@@ -1,10 +1,8 @@
 class_name DotWorkbenchOverlay
 extends PanelContainer
 
-## The in-game workbench window: a title bar (Save to server, Export changes as defaults, Import, Close)
-## over dot-menu's profile editor, bound to a [DotWorkbenchApi] by [DotWorkbenchPanel].
-##
-## dot-ui and dot-menu are loaded by path, so a build without them gets [code]null[/code] from [method create].
+## The in-game workbench window: a title bar over dot-menu's profile editor, bound to a [DotWorkbenchApi].
+## dot-ui and dot-menu are loaded by path, so a build without them gets null from [method create].
 
 const EDITOR_SCRIPT := "res://addons/dot_menu/ui/dot_profile_editor_screen.gd"
 const TOKENS_SCRIPT := "res://addons/dot_ui/form/dot_form_tokens.gd"

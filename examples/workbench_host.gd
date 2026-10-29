@@ -1,10 +1,7 @@
 extends Node
 
 ## Demo host: serves the workbench page on loopback with sample profiles until quit. Token is "s3cret".
-##
-## [codeblock]
-## godot --headless --path . res://examples/workbench_host.tscn -- 8791
-## [/codeblock]
+## Run: godot --headless --path . res://examples/workbench_host.tscn -- 8791
 
 const BASE := "user://workbench_host"
 

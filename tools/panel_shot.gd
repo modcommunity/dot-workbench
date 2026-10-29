@@ -1,9 +1,7 @@
 extends SceneTree
 
-## Renders the in-game panel (DotProfileEditorScreen bound by DotWorkbenchPanel) to docs/.
-## Needs dot-ui, dot-menu and dot-settings linked into addons/ (dev only).
-##
-##   xvfb-run -a godot --path . --resolution 1280x800 --script tools/panel_shot.gd
+## Renders the in-game panel to docs/; needs dot-ui, dot-menu and dot-settings linked (dev only).
+## Run: xvfb-run -a godot --path . --resolution 1280x800 --script tools/panel_shot.gd
 
 const BASE := "user://workbench_panel_shot"
 

@@ -2,12 +2,8 @@ class_name DotWorkbenchExport
 extends RefCounted
 
 ## "Export changes as defaults" and "Import": the tuning round trip.
-##
-## Export writes only the values whose live edit differs from the shipped value, one yml per profile in
-## the repo's own cfg/ layout (`cfg/game/<game>/<kind>/<id>.yml`, or `cfg/addons/<addon>/...` for an addon
-## set), so the folder can be copied over a repository's cfg/ as new defaults. The same files come as a
-## zip and as one text bundle for the clipboard. Import takes any of the three back and applies it
-## through the api, so it is validated and permission-checked like any other edit.
+## Export writes only changed values, one yml per profile in the repo's cfg/ layout (files, zip or text bundle);
+## Import applies any of them through the api, so it is validated and permission-checked.
 
 const CHANNEL := "workbench"
 const ROOT := "user://workbench-export"

@@ -1,10 +1,7 @@
 extends Node
 
 ## Exercises [DotWorkbenchApi] and its HTTP adapter: list, get, set, reset, save, permission refusal and bad input.
-##
-## [codeblock]
-## godot --headless --path . res://examples/workbench_selftest.tscn
-## [/codeblock]
+## Run: godot --headless --path . res://examples/workbench_selftest.tscn
 
 const SECTIONS := 13
 const CHECKS := 121
