@@ -54,7 +54,7 @@ workbench:
   lockout_sec: 300        # 429 with Retry-After for this long
 ```
 
-Layering is the family's: defaults < file < environment < command line, except that `token_file` contents and the TLS key are only ever read from the file. Binding to a non-loopback address with `mode: proxy` and no TLS logs a WARN at start. TLS is a reverse proxy by default (certificate renewal belongs there); native TLS is the option for a box with no proxy, using Godot's `TLSOptions.server(key, cert)`.
+Layering is the family's: defaults < file < environment < command line, except that `token_file` contents and the TLS key are only ever read from the file. Binding to a non-loopback address with `mode: proxy` and no TLS is refused (the bearer token would travel in clear) unless `allow_plain_remote: true` says a trusted proxy sits in front. TLS is a reverse proxy by default (certificate renewal belongs there); native TLS is the option for a box with no proxy, using Godot's `TLSOptions.server(key, cert)`.
 
 ## Dependencies
 

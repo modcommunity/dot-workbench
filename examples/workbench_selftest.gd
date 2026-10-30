@@ -4,7 +4,7 @@ extends Node
 ## Run: godot --headless --path . res://examples/workbench_selftest.tscn
 
 const SECTIONS := 13
-const CHECKS := 121
+const CHECKS := 125
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -189,7 +189,20 @@ func _test_http() -> void:
 	_check(off.ok and not h.server.is_listening(), "disabled by default opens nothing")
 	_check(not DotWorkbenchHttp.new(_api()).start_from_config({"enabled": true}).ok, "enabled with no token source refuses to start")
 	_check(not DotWorkbenchHttp.new(_api()).start_from_config({"enabled": true, "token_file": BASE + "/missing.token"}).ok, "a missing token file refuses to start")
+	var remote := DotWorkbenchHttp.new(_api())
+	var half_h := DotWorkbenchHttp.new(_api())
+	var nofile_h := DotWorkbenchHttp.new(_api())
+	var opt := DotWorkbenchHttp.new(_api())
 	_w("workbench.token", "  s3cret\n")
+	var rr := remote.start_from_config({"enabled": true, "port": 0, "bind": "0.0.0.0", "token_file": BASE + "/workbench.token"})
+	_check(not rr.ok and not remote.server.is_listening(), "plain HTTP on a non-loopback bind is refused by default")
+	var half := half_h.start_from_config({"enabled": true, "port": 0, "token_file": BASE + "/workbench.token", "tls": {"mode": "native", "cert": BASE + "/none.crt"}})
+	_check(not half.ok, "native tls with a certificate and no key refuses to start")
+	var nofile := nofile_h.start_from_config({"enabled": true, "port": 0, "bind": "0.0.0.0", "token_file": BASE + "/workbench.token", "tls": {"mode": "native", "cert": BASE + "/none.crt", "key": BASE + "/none.key"}})
+	_check(not nofile.ok and _code(nofile) == DotError.CODE_IO, "native tls with missing files fails on the files, never falls back to plain")
+	var ok := opt.start_from_config({"enabled": true, "port": 0, "bind": "127.0.0.1", "allow_plain_remote": true, "token_file": BASE + "/workbench.token"})
+	_check(ok.ok, "loopback plain still starts")
+	opt.stop()
 	var res := h.start_from_config({"enabled": true, "port": 0, "token_file": BASE + "/workbench.token"})
 	_check(res.ok and h.server.is_listening(), "enabled with a token file listens on loopback")
 	if not res.ok:

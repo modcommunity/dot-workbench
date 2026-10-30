@@ -74,8 +74,11 @@ func start_from_config(cfg: Dictionary) -> DotResult:
 	lockout_sec = float(cfg.get("lockout_sec", lockout_sec))
 	var tls: Dictionary = cfg.get("tls", {}) if cfg.get("tls", {}) is Dictionary else {}
 	var native := str(tls.get("mode", "proxy")) == "native"
+	var bind := str(cfg.get("bind", DotHttpServer.LOOPBACK))
+	if not native and not DotHttpServer.is_loopback(bind) and not bool(cfg.get("allow_plain_remote", false)):
+		return DotResult.fail(DotError.CODE_INVALID, "workbench would send its bearer token in clear on a non-loopback address; use native tls or set allow_plain_remote behind a trusted proxy", bind)
 	_load_page()
-	return server.start(int(cfg.get("port", 8790)), str(cfg.get("bind", DotHttpServer.LOOPBACK)),
+	return server.start(int(cfg.get("port", 8790)), bind,
 		str(tls.get("cert", "")) if native else "", str(tls.get("key", "")) if native else "")
 
 
