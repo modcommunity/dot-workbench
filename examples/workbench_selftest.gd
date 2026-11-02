@@ -3,8 +3,8 @@ extends Node
 ## Exercises [DotWorkbenchApi] and its HTTP adapter: list, get, set, reset, save, permission refusal and bad input.
 ## Run: godot --headless --path . res://examples/workbench_selftest.tscn
 
-const SECTIONS := 13
-const CHECKS := 125
+const SECTIONS := 14
+const CHECKS := 136
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -30,6 +30,7 @@ func _ready() -> void:
 	_test_export()
 	_test_add_delete()
 	_test_schema_field()
+	_test_spawn_editor()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -399,6 +400,51 @@ func _rm(dir: String) -> void:
 	for d in DirAccess.get_directories_at(dir):
 		_rm(dir.path_join(d))
 	DirAccess.remove_absolute(dir)
+
+
+func _test_spawn_editor() -> void:
+	_section("spawn editor writes points as a per-map override")
+	_clean()
+	var s := DotProfileSet.create("dot_spawn", "mygame", "spawn", [DotProfileSet.field("points", "dict", {})])
+	s.roots = PackedStringArray([BASE])
+	s.override_prefix = "wbt"
+	var api := DotWorkbenchApi.new()
+	api.runtime.save_root = BASE
+	api.add_set(s)
+	var ed := DotWorkbenchSpawnEditor.new()
+	add_child(ed)
+	ed.api = api
+	ed.actor = DotWorkbenchApi.TOKEN_ACTOR
+	ed.map_id = "arena_a"
+	ed.ray_fn = func(from: Vector3, dir: Vector3) -> Dictionary:
+		if dir.y >= -0.001:
+			return {}
+		return {"position": from + dir * (-from.y / dir.y), "normal": Vector3.UP}
+	ed.load_points([{"id": "sp_0", "pos": [0, 0, 0], "yaw": 0.0, "team": "", "enabled": true, "weight": 1.0, "tags": []}])
+	var from := Vector3(10, 10, 0)
+	var dir := (Vector3(10, 0, -5) - from).normalized()
+	var id := ed.click(from, dir)
+	_check(id.begins_with("auth_") and ed.points.has(id), "a click on the floor adds an authored point")
+	var pos := DotWorkbenchSpawnEditor._pos(ed.points[id])
+	_check(pos.distance_to(Vector3(10, 0, -5)) < 0.01, "at the surface the ray hit")
+	_check(s.has_id("arena_a") and (api.handle(ed.actor, {"op": "get", "kind": "spawn", "id": "arena_a"}).value["values"]["points"] as Dictionary).has(id), "the map's spawn profile exists and holds it")
+	_check(ed.click(from, dir) == id and ed.selected == id and ed.points.size() == 2, "a click on an existing point selects it instead")
+	_check(ed.edit(id, "team", "2") and ed.edit(id, "weight", 3.0) and ed.edit(id, "yaw", 1.5), "team, weight and facing edit")
+	_check(ed.move_point(id, Vector3(4, 0, 4)) and DotWorkbenchSpawnEditor._pos(ed.points[id]).x == 4.0, "a point moves")
+	_check(ed.delete_point("sp_0") and not ed.points.has("sp_0"), "a map point deletes")
+	var saved: Dictionary = api.handle(ed.actor, {"op": "get", "kind": "spawn", "id": "arena_a"}).value["values"]["points"]
+	_check(saved["sp_0"].get("removed", false) == true and saved[id]["team"] == "2", "as a removed marker beside the edited authored point")
+	_check(ed.get_child_count() == 1, "one gizmo is shown per point")
+	var ok_files := FileAccess.file_exists(BASE.path_join("server/game/mygame/spawn/arena_a.yml"))
+	_check(ok_files, "the edit is saved to the server tier")
+	var plain := DotWorkbenchSpawnEditor.new()
+	add_child(plain)
+	plain.api = api
+	plain.actor = "nobody"
+	plain.map_id = "arena_a"
+	plain.load_points([])
+	api.permit = func(_a: Variant, _f: String) -> bool: return false
+	_check(plain.add_point(Vector3.ONE) == "" and plain.points.is_empty(), "an actor without the flag adds nothing")
 
 
 func _section(title: String) -> void:
