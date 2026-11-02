@@ -81,7 +81,7 @@ func _bar() -> Control:
 	title.add_theme_font_size_override("font_size", 20)
 	row.add_child(title)
 	var sub := Label.new()
-	sub.text = "live tuning  -  F9 closes"
+	sub.text = "live tuning  -  the workbench key closes"
 	sub.add_theme_color_override("font_color", tokens.get("text_faint"))
 	sub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(sub)

@@ -18,7 +18,7 @@ An exported host needs `*.html` in the preset's `include_filter`, or the page is
 
 ## Tuning and sending back defaults
 
-Inside a game the workbench is a window on **F9** (or the console command `workbench`). It is on in the editor, in debug builds and for whoever hosts a listen game, and off in a production build. Pick a profile, change values, press Apply: the change is live at once. Nothing is saved until you ask.
+Inside a game the workbench is a window on the **`;`** key, rebindable as `bind_workbench` in the controls settings (or the console command `workbench`). It is on in the editor, in debug builds and for whoever hosts a listen game, and off in a production build. Pick a profile, change values, press Apply: the change is live at once. Nothing is saved until you ask.
 
 When the game feels right, press **Export changes as defaults**. It writes only the values that differ from the shipped defaults, one small yml per profile in the repository's own `cfg/` layout, to `user://workbench-export/<date_time>/`, as a zip beside that folder, and as one block of text on your clipboard. Send the zip or paste the text back. To adopt it, copy the `cfg/` folder over the repository's `cfg/` and commit; `game-cvars.yml`, when present, goes into the `cvars:` block of `game.yml`.
 
