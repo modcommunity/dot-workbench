@@ -23,7 +23,14 @@ var permit: Callable = Callable():
 		_inner_permit = v
 		permit = v
 
+## Writes one actor may make per [member write_window_sec] before CODE_RATE_LIMITED; 0 disables.
+var write_limit := 120
+var write_window_sec := 10.0
+## Callable() -> seconds; tests replace it so no real time passes.
+var clock: Callable = func() -> float: return Time.get_ticks_msec() / 1000.0
+
 var runtime: DotProfileRuntime
+var _writes: Dictionary = {}
 var _token := ""
 var _inner_permit: Callable = Callable()
 var _sets: Dictionary = {}
@@ -73,6 +80,9 @@ func handle(actor: Variant, req: Dictionary) -> DotResult:
 	for k in ["kind", "id", "key"]:
 		if req.has(k) and not (req[k] is String):
 			return DotResult.fail(DotError.CODE_INVALID, "'%s' must be a string" % k)
+	if write_limit > 0 and not _take_write_slot(actor):
+		DotLog.warn(CHANNEL, "workbench write rate limited", {"actor": str(actor)})
+		return DotResult.fail(DotError.CODE_RATE_LIMITED, "too many writes; wait %d s" % ceili(write_window_sec))
 	var before: Variant = _value_before(req)
 	var res := runtime.handle_request(actor, req)
 	if res.ok and forward.is_valid():
@@ -122,6 +132,21 @@ func handle_json(token: String, text: String) -> String:
 	if not (parsed is Dictionary):
 		return JSON.stringify(to_reply(DotResult.fail(DotError.CODE_INVALID, "body must be a JSON object")))
 	return JSON.stringify(to_reply(handle(auth.value, parsed)))
+
+
+## Sliding window per actor, so a stolen or buggy token cannot flood the audit log and the save path.
+func _take_write_slot(actor: Variant) -> bool:
+	var now: float = clock.call()
+	var key := str(actor)
+	var stamps: Array = _writes.get(key, [])
+	while not stamps.is_empty() and now - stamps[0] >= write_window_sec:
+		stamps.pop_front()
+	if stamps.size() >= write_limit:
+		_writes[key] = stamps
+		return false
+	stamps.append(now)
+	_writes[key] = stamps
+	return true
 
 
 ## `[value]` of a `set` request's path as it is now (without the runtime layer), or null when not a set.

@@ -3,8 +3,8 @@ extends Node
 ## Exercises [DotWorkbenchApi] and its HTTP adapter: list, get, set, reset, save, permission refusal and bad input.
 ## Run: godot --headless --path . res://examples/workbench_selftest.tscn
 
-const SECTIONS := 14
-const CHECKS := 136
+const SECTIONS := 15
+const CHECKS := 141
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -31,6 +31,7 @@ func _ready() -> void:
 	_test_add_delete()
 	_test_schema_field()
 	_test_spawn_editor()
+	_test_write_rate_limit()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -445,6 +446,25 @@ func _test_spawn_editor() -> void:
 	plain.load_points([])
 	api.permit = func(_a: Variant, _f: String) -> bool: return false
 	_check(plain.add_point(Vector3.ONE) == "" and plain.points.is_empty(), "an actor without the flag adds nothing")
+
+
+func _test_write_rate_limit() -> void:
+	_section("writes are rate limited per actor")
+	var api := _api()
+	var t := [0.0]
+	api.clock = func() -> float: return t[0]
+	api.write_limit = 3
+	api.write_window_sec = 10.0
+	var a := DotWorkbenchApi.TOKEN_ACTOR
+	var ok := 0
+	for i in 3:
+		ok += 1 if api.handle(a, _req("set", "npc", "zombie", "health", 100 + i)).ok else 0
+	_check(ok == 3, "writes up to the limit pass")
+	_check(_code(api.handle(a, _req("set", "npc", "zombie", "health", 9))) == "rate_limited", "the next write is refused as rate_limited")
+	_check(api.handle(a, _req("get")).value["values"]["health"] == 102, "a refused write changed nothing, and reads are not counted")
+	_check(api.handle("mod", _req("set", "npc", "zombie", "health", 5)).ok, "another actor has its own budget")
+	t[0] = 10.5
+	_check(api.handle(a, _req("set", "npc", "zombie", "health", 7)).ok, "the window slides and writes pass again")
 
 
 func _section(title: String) -> void:
