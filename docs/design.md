@@ -28,6 +28,7 @@ One request object in, one reply out. Request: `{"op", "kind", "id", "key", "val
 | `reset_key` | `cvar` | the row |
 | `reset` | `cvar` | the row |
 | `save` | `root` | `{saved: path}` |
+| `changes` | `cvar` | `{profiles: [{kind, id, changes: [{path, before, now}]}]}`: this session's edits that differ from the shipped value; `kind` and `id` optional filters |
 
 Reply: `{"ok": true, "value": ...}` or `{"ok": false, "error": {"code", "message"}}` where `code` is a `DotError.CODE_*` (`forbidden`, `invalid`, ...). Clients branch on `code`. Later ops (map cycle, waves, soak report) are new `op` names on the same envelope.
 

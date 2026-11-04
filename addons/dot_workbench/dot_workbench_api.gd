@@ -7,6 +7,7 @@ const CHANNEL := "workbench"
 const TOKEN_ACTOR := "workbench-token"
 const OP_LIST := "list"
 const OP_GET := "get"
+const OP_CHANGES := "changes"
 
 ## Flag a caller needs for list and get; edits use the runtime's own edit_flag and save_flag.
 var read_flag := "cvar"
@@ -73,9 +74,11 @@ func authenticate(token: String) -> DotResult:
 ## Handles one request; value on success is a JSON-able Dictionary.
 func handle(actor: Variant, req: Dictionary) -> DotResult:
 	var op := str(req.get("op", ""))
-	if op == OP_LIST or op == OP_GET:
+	if op == OP_LIST or op == OP_GET or op == OP_CHANGES:
 		if not _permit(actor, read_flag):
 			return DotResult.fail(DotError.CODE_FORBIDDEN, "reading profiles needs '%s'" % read_flag)
+		if op == OP_CHANGES:
+			return _read_changes(req)
 		return _read_list(req) if op == OP_LIST else _read_get(req)
 	for k in ["kind", "id", "key"]:
 		if req.has(k) and not (req[k] is String):
@@ -206,6 +209,39 @@ func _read_list(req: Dictionary) -> DotResult:
 	for id in (_sets[kind] as DotProfileSet).list_ids():
 		ids.append(String(id))
 	return DotResult.success({"kind": kind, "ids": ids})
+
+
+## Keys edited this session whose value now differs from the shipped one: {profiles: [{kind, id, changes: [{path, before, now}]}]}.
+func _read_changes(req: Dictionary) -> DotResult:
+	var kind := str(req.get("kind", ""))
+	var id := str(req.get("id", ""))
+	var profiles: Array = []
+	for bkey in _baseline:
+		var parts := String(bkey).split("/", true, 1)
+		if (not kind.is_empty() and parts[0] != kind) or (not id.is_empty() and parts[1] != id):
+			continue
+		var changes: Array = []
+		for path in _baseline[bkey]:
+			var now := _current_value(parts[0], parts[1], String(path))
+			if now["found"] and now["value"] != _baseline[bkey][path]:
+				changes.append({"path": path, "before": _baseline[bkey][path], "now": now["value"]})
+		if not changes.is_empty():
+			profiles.append({"kind": parts[0], "id": parts[1], "changes": changes})
+	return DotResult.success({"profiles": profiles})
+
+
+func _current_value(kind: String, id: String, path: String) -> Dictionary:
+	var got := _read_get({"kind": kind, "id": id})
+	if not got.ok:
+		return {"found": false, "value": null}
+	var tree: Dictionary = (got.value["values"] as Dictionary).duplicate(true)
+	tree["extra"] = got.value["extra"]
+	var node: Variant = tree
+	for part in path.split("."):
+		if not (node is Dictionary) or not (node as Dictionary).has(part):
+			return {"found": false, "value": null}
+		node = node[part]
+	return {"found": true, "value": node}
 
 
 func _read_get(req: Dictionary) -> DotResult:

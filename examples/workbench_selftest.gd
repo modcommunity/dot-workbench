@@ -3,8 +3,8 @@ extends Node
 ## Exercises [DotWorkbenchApi] and its HTTP adapter: list, get, set, reset, save, permission refusal and bad input.
 ## Run: godot --headless --path . res://examples/workbench_selftest.tscn
 
-const SECTIONS := 15
-const CHECKS := 141
+const SECTIONS := 16
+const CHECKS := 148
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -32,6 +32,7 @@ func _ready() -> void:
 	_test_schema_field()
 	_test_spawn_editor()
 	_test_write_rate_limit()
+	_test_changes()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -465,6 +466,25 @@ func _test_write_rate_limit() -> void:
 	_check(api.handle("mod", _req("set", "npc", "zombie", "health", 5)).ok, "another actor has its own budget")
 	t[0] = 10.5
 	_check(api.handle(a, _req("set", "npc", "zombie", "health", 7)).ok, "the window slides and writes pass again")
+
+
+func _test_changes() -> void:
+	_section("changes op lists session edits against the shipped values")
+	var api := _api()
+	var a := DotWorkbenchApi.TOKEN_ACTOR
+	_check(api.handle(a, {"op": "changes"}).value["profiles"].is_empty(), "no edits: empty list")
+	var _r1 := api.handle(a, _req("set", "npc", "zombie", "health", 400))
+	var _r2 := api.handle(a, _req("set", "npc", "zombie", "speed", 2.5))
+	var _r3 := api.handle(a, _req("set", "npc", "ghoul", "health", 30))
+	var all := api.handle(a, {"op": "changes"}).value["profiles"] as Array
+	_check(all.size() == 2, "two edited profiles")
+	var z := api.handle(a, {"op": "changes", "kind": "npc", "id": "zombie"}).value["profiles"] as Array
+	_check(z.size() == 1 and z[0]["changes"].size() == 1, "an edit equal to the shipped value is not a change")
+	_check(z[0]["changes"][0] == {"path": "health", "before": 50, "now": 400}, "row carries path, before and now")
+	var _r4 := api.handle(a, _req("set", "npc", "zombie", "health", 50))
+	_check(api.handle(a, {"op": "changes", "kind": "npc", "id": "zombie"}).value["profiles"].is_empty(), "set back drops out")
+	_check(api.handle("nobody", {"op": "changes"}).error.code == DotError.CODE_FORBIDDEN, "needs the read flag")
+	_check(DotWorkbenchApi.to_reply(api.handle(a, {"op": "changes"}))["ok"] == true, "wire reply is ok")
 
 
 func _section(title: String) -> void:
