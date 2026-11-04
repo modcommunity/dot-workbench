@@ -36,6 +36,10 @@ tr.over td.key::after { content:"runtime"; margin-left:8px; font:600 11px system
 .muted { color:var(--muted); font-size:13px; }
 #status { min-height:1.5em; }
 .hidden { display:none; }
+#diff h2 { font-size:15px; margin:0 0 8px; }
+td.before { color:var(--muted); text-decoration:line-through; font-family:ui-monospace,monospace; font-size:13px; }
+td.now { color:var(--ok); font-family:ui-monospace,monospace; font-size:13px; }
+.prof { margin:10px 0 4px; font-weight:600; font-size:13px; }
 </style>
 </head>
 <body>
@@ -70,6 +74,10 @@ tr.over td.key::after { content:"runtime"; margin-left:8px; font:600 11px system
       <button id="resetall">Reset all runtime edits</button>
       <button id="save" class="primary">Save to server layer</button>
     </div>
+  </section>
+  <section class="card hidden" id="diff">
+    <div class="row"><h2 style="margin:0 auto 0 0">Changed this session</h2><button id="diffreload">Refresh</button></div>
+    <div id="diffbody" class="muted">No edits differ from the shipped values.</div>
   </section>
   <div id="status" role="status" aria-live="polite"></div>
 </main>
@@ -111,7 +119,7 @@ function parseLike(text, sample) {
 
 function logout(msg) {
   token = ""; sessionStorage.removeItem("wb-token");
-  for (const id of ["picker", "editor", "logout"]) $(id).classList.add("hidden");
+  for (const id of ["picker", "editor", "diff", "logout"]) $(id).classList.add("hidden");
   $("login").classList.remove("hidden");
   $("loginerr").textContent = msg || "";
 }
@@ -142,6 +150,30 @@ async function loadProfile() {
   if (!r.ok) { say(r.error.message, "err"); return; }
   current = r.value;
   render();
+}
+
+async function loadDiff() {
+  const r = await api("POST", "/api", { op: "changes" });
+  const box = $("diffbody"); box.replaceChildren();
+  if (!r.ok) { box.className = "err"; box.textContent = r.error.message; return; }
+  const profiles = r.value.profiles;
+  box.className = profiles.length ? "" : "muted";
+  if (!profiles.length) { box.textContent = "No edits differ from the shipped values."; return; }
+  const show = v => typeof v === "object" ? JSON.stringify(v) : String(v);
+  for (const p of profiles) {
+    const h = document.createElement("div"); h.className = "prof"; h.textContent = p.kind + "/" + p.id;
+    const t = document.createElement("table");
+    t.innerHTML = "<thead><tr><th>Field</th><th>Shipped</th><th>Now</th></tr></thead>";
+    const tb = document.createElement("tbody");
+    for (const c of p.changes) {
+      const tr = document.createElement("tr");
+      for (const [cls, text] of [["key", c.path], ["before", show(c.before)], ["now", show(c.now)]]) {
+        const td = document.createElement("td"); td.className = cls; td.textContent = text; tr.append(td);
+      }
+      tb.append(tr);
+    }
+    t.append(tb); box.append(h, t);
+  }
 }
 
 function render() {
@@ -182,6 +214,8 @@ function render() {
     tr.append(k, val, act); rows.append(tr);
   }
   $("editor").classList.remove("hidden");
+  $("diff").classList.remove("hidden");
+  loadDiff();
 }
 
 $("loginform").onsubmit = e => { e.preventDefault(); token = $("token").value.trim(); $("token").value = ""; connect(); };
@@ -189,6 +223,7 @@ $("logout").onclick = () => logout("");
 $("kind").onchange = loadIds;
 $("id").onchange = loadProfile;
 $("reload").onclick = loadProfile;
+$("diffreload").onclick = loadDiff;
 $("resetall").onclick = async () => {
   const r = await api("DELETE", "/api/profiles/" + enc($("kind").value) + "/" + enc($("id").value));
   say(r.ok ? "runtime edits cleared" : r.error.message, r.ok ? "ok" : "err"); await loadProfile();
