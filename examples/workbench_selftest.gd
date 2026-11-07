@@ -3,8 +3,8 @@ extends Node
 ## Exercises [DotWorkbenchApi] and its HTTP adapter: list, get, set, reset, save, permission refusal and bad input.
 ## Run: godot --headless --path . res://examples/workbench_selftest.tscn
 
-const SECTIONS := 17
-const CHECKS := 156
+const SECTIONS := 18
+const CHECKS := 169
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -31,6 +31,7 @@ func _ready() -> void:
 	_test_add_delete()
 	_test_schema_field()
 	_test_spawn_editor()
+	_test_flag_placement()
 	_test_write_rate_limit()
 	_test_changes()
 	_clean()
@@ -473,6 +474,66 @@ func _test_spawn_editor() -> void:
 	plain.load_points([])
 	api.permit = func(_a: Variant, _f: String) -> bool: return false
 	_check(plain.add_point(Vector3.ONE) == "" and plain.points.is_empty(), "an actor without the flag adds nothing")
+
+
+func _test_flag_placement() -> void:
+	_section("flag stands are placed per team, for any number of teams")
+	_clean()
+	var s := DotProfileSet.create("dot_spawn", "mygame", "spawn", [DotProfileSet.field("points", "dict", {})])
+	s.roots = PackedStringArray([BASE])
+	s.override_prefix = "wbt"
+	var api := DotWorkbenchApi.new()
+	api.runtime.save_root = BASE
+	api.add_set(s)
+	var ed := DotWorkbenchSpawnEditor.new()
+	add_child(ed)
+	ed.api = api
+	ed.actor = DotWorkbenchApi.TOKEN_ACTOR
+	ed.map_id = "ctf_a"
+	ed.team_count = 3
+	ed.ray_fn = func(from: Vector3, dir: Vector3) -> Dictionary:
+		if dir.y >= -0.001:
+			return {}
+		return {"position": from + dir * (-from.y / dir.y), "normal": Vector3.UP}
+	ed.load_points([])
+	var f1 := ed.add_flag(Vector3(-40, 0, 0), 1)
+	var f2 := ed.add_flag(Vector3(40, 0, 0), 2)
+	var f3 := ed.add_flag(Vector3(0, 0, 60), 3)
+	_check(f1 != "" and f2 != "" and f3 != "" and ed.flag_of(3) == f3, "three teams each get a flag stand")
+	_check(ed.add_flag(Vector3(1, 0, 1), 9) == "" and ed.add_flag(Vector3(1, 0, 1), 0) == "", "a team outside 1..8 is refused")
+	_check(ed.add_flag(Vector3(-30, 0, 5), 1) == f1 and ed.points.size() == 3, "placing team 1's flag again moves it, a team has one")
+	var saved: Dictionary = api.handle(ed.actor, {"op": "get", "kind": "spawn", "id": "ctf_a"}).value["values"]["points"]
+	_check(saved[f1]["kind"] == "flag" and saved[f1]["team"] == "1" and saved[f1]["pos"][0] == -30.0, "the profile stores kind, team and the new position")
+	ed.place_kind = "flag"
+	ed.place_team = 2
+	var from := Vector3(10, 10, 0)
+	var hit := ed.click(from, (Vector3(10, 0, -5) - from).normalized())
+	_check(hit == f2 and ed.points.size() == 3, "a flag-tool click for team 2 moves its stand to the aim")
+	ed.place_kind = ""
+	var p := ed.click(from, (Vector3(-10, 0, 20) - from).normalized())
+	_check(p != "" and not ed.points[p].has("kind") and ed.points[p]["team"] == "", "with the player tool a click adds an ordinary spawn")
+	ed._tool_key(KEY_F)
+	ed._tool_key(KEY_3)
+	_check(ed.place_kind == "flag" and ed.place_team == 3, "F toggles the tool and 3 picks team 3")
+	ed._tool_key(KEY_8)
+	_check(ed.place_team == 3, "a team above team_count is ignored")
+	ed.select(p)
+	ed._key(KEY_G)
+	_check(ed.points[p]["kind"] == "flag", "G turns the selected spawn into a flag stand")
+	ed._key(KEY_T)
+	_check(ed.points[p]["team"] == "1", "and T never leaves a flag teamless")
+	for i in 3:
+		ed._key(KEY_T)
+	_check(ed.points[p]["team"] == "1", "T cycles 1, 2, 3 and back for three teams")
+	var plain := DotWorkbenchSpawnEditor.new()
+	add_child(plain)
+	plain.api = api
+	plain.actor = "nobody"
+	plain.map_id = "ctf_b"
+	plain.load_points([])
+	api.permit = func(_a: Variant, _f: String) -> bool: return false
+	_check(plain.add_flag(Vector3.ONE, 1) == "", "an actor without the flag places nothing")
+	_check(DotWorkbenchSpawnEditor.TEAM_COLORS.size() > 8, "every team has a colour")
 
 
 func _test_write_rate_limit() -> void:
