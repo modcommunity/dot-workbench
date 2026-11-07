@@ -3,11 +3,13 @@ extends Node3D
 
 ## Point-and-click spawn authoring: aim, click to add, select, move, turn, edit, delete. Every edit goes through [DotWorkbenchApi] into the `spawn` profile of [member map_id] and is saved at once.
 ##
-## Duck-typed to dot-spawn: points are plain Dictionaries in the override entry format (pos, yaw, team, enabled, weight, tags).
+## Duck-typed to dot-spawn: points are plain Dictionaries in the override entry format (pos, yaw, team, kind, enabled, weight, tags).
 
 const KIND := "spawn"
 const PICK_RADIUS := 1.2
-const TEAM_COLORS := [Color(0.95, 0.95, 0.95), Color(0.9, 0.25, 0.25), Color(0.25, 0.45, 0.95), Color(0.3, 0.8, 0.35), Color(0.95, 0.8, 0.2)]
+const TEAM_COLORS := [Color(0.95, 0.95, 0.95), Color(0.9, 0.25, 0.25), Color(0.25, 0.45, 0.95), Color(0.3, 0.8, 0.35), Color(0.95, 0.8, 0.2), Color(0.8, 0.35, 0.9), Color(0.2, 0.85, 0.85), Color(0.95, 0.55, 0.2), Color(0.6, 0.6, 0.6)]
+const KIND_FLAG := "flag"
+const MAX_TEAMS := 8
 
 signal changed(id: String)
 signal selected_changed(id: String)
@@ -19,6 +21,12 @@ var map_id := ""
 var ray_fn: Callable
 var camera: Camera3D
 var selected := ""
+## How many teams the mode plays; T cycles a point's team through none and 1..team_count.
+var team_count := 2
+## What a click places: "" for a player spawn, "flag" for a flag stand.
+var place_kind := ""
+## The team a placed point gets; flags need one.
+var place_team := 1
 ## id -> entry, everything shown (map points merged with the saved overrides).
 var points: Dictionary = {}
 
@@ -37,12 +45,43 @@ func load_points(shown: Array) -> void:
 
 
 ## Adds an authored point at [param pos]; returns its id, or "" when the write was refused.
-func add_point(pos: Vector3, yaw := 0.0, team := "") -> String:
+func add_point(pos: Vector3, yaw := 0.0, team := "", kind := "") -> String:
+	if kind == KIND_FLAG:
+		return add_flag(pos, int(team) if team.is_valid_int() else place_team, yaw)
+	return _add(pos, yaw, team, kind)
+
+
+## Places a team's flag stand, moving the one that team already has: a team owns exactly one. Returns the id, or "".
+func add_flag(pos: Vector3, team: int, yaw := 0.0) -> String:
+	if team < 1 or team > MAX_TEAMS:
+		return ""
+	for id: String in points:
+		var e: Dictionary = points[id]
+		if str(e.get("kind", "")) == KIND_FLAG and str(e.get("team", "")) == str(team):
+			if not move_point(id, pos):
+				return ""
+			select(id)
+			return id
+	return _add(pos, yaw, str(team), KIND_FLAG)
+
+
+## The flag stand of [param team], or "".
+func flag_of(team: int) -> String:
+	for id: String in points:
+		var e: Dictionary = points[id]
+		if str(e.get("kind", "")) == KIND_FLAG and str(e.get("team", "")) == str(team):
+			return id
+	return ""
+
+
+func _add(pos: Vector3, yaw: float, team: String, kind: String) -> String:
 	var id := "auth_%d" % _next
 	while points.has(id):
 		_next += 1
 		id = "auth_%d" % _next
 	var entry := {"pos": _vec(pos), "yaw": yaw, "team": team, "enabled": true, "weight": 1.0, "tags": []}
+	if kind != "":
+		entry["kind"] = kind
 	if not _write(id, entry).ok:
 		return ""
 	points[id] = entry
@@ -115,7 +154,8 @@ func click(from: Vector3, dir: Vector3) -> String:
 	if r.is_empty():
 		return ""
 	var flat := Vector3(dir.x, 0.0, dir.z)
-	return add_point(r["position"], atan2(-flat.x, -flat.z) if flat.length() > 0.01 else 0.0)
+	var yaw := atan2(-flat.x, -flat.z) if flat.length() > 0.01 else 0.0
+	return add_point(r["position"], yaw, str(place_team) if place_kind == KIND_FLAG else "", place_kind)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -124,8 +164,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var m := (event as InputEventMouseButton).position
 		click(camera.project_ray_origin(m), camera.project_ray_normal(m))
-	elif event is InputEventKey and event.pressed and not selected.is_empty():
-		_key((event as InputEventKey).keycode)
+	elif event is InputEventKey and event.pressed:
+		_tool_key((event as InputEventKey).keycode)
+		if not selected.is_empty():
+			_key((event as InputEventKey).keycode)
+
+
+## Keys that choose what the next click places: F toggles player spawn and flag stand, 1..8 pick the team.
+func _tool_key(code: Key) -> void:
+	if code == KEY_F:
+		place_kind = "" if place_kind == KIND_FLAG else KIND_FLAG
+	elif code >= KEY_1 and code <= KEY_8 and code - KEY_1 + 1 <= team_count:
+		place_team = code - KEY_1 + 1
 
 
 func _key(code: Key) -> void:
@@ -138,8 +188,15 @@ func _key(code: Key) -> void:
 		KEY_E:
 			edit(selected, "yaw", float(e.get("yaw", 0.0)) - deg_to_rad(15.0))
 		KEY_T:
-			var teams := ["", "1", "2"]
-			edit(selected, "team", teams[(teams.find(str(e.get("team", ""))) + 1) % teams.size()])
+			var teams := [""]
+			for t in team_count:
+				teams.append(str(t + 1))
+			var next: String = teams[(teams.find(str(e.get("team", ""))) + 1) % teams.size()]
+			if str(e.get("kind", "")) == KIND_FLAG and next == "":
+				next = "1"
+			edit(selected, "team", next)
+		KEY_G:
+			edit(selected, "kind", "" if str(e.get("kind", "")) == KIND_FLAG else KIND_FLAG)
 		KEY_V:
 			edit(selected, "enabled", not bool(e.get("enabled", true)))
 		KEY_BRACKETLEFT:
@@ -190,6 +247,9 @@ func _gizmo(id: String, e: Dictionary) -> Node3D:
 	root.rotation.y = float(e.get("yaw", 0.0))
 	var color := _color(e)
 	var sel := id == selected
+	if str(e.get("kind", "")) == KIND_FLAG:
+		_flag_gizmo(root, e, color, sel)
+		return root
 	var body := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.35
@@ -216,6 +276,34 @@ func _gizmo(id: String, e: Dictionary) -> Node3D:
 		ring.material_override = _mat(Color.YELLOW, 1.0)
 		root.add_child(ring)
 	return root
+
+
+func _flag_gizmo(root: Node3D, e: Dictionary, color: Color, sel: bool) -> void:
+	var on := 1.0 if bool(e.get("enabled", true)) else 0.3
+	var pole := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.05
+	cyl.bottom_radius = 0.05
+	cyl.height = 3.0
+	pole.mesh = cyl
+	pole.position.y = 1.5
+	pole.material_override = _mat(Color.WHITE, on)
+	root.add_child(pole)
+	var banner := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.05, 0.8, 1.2)
+	banner.mesh = box
+	banner.position = Vector3(0, 2.5, -0.6)
+	banner.material_override = _mat(color, on)
+	root.add_child(banner)
+	var base := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 1.6
+	torus.outer_radius = 1.8
+	base.mesh = torus
+	base.position.y = 0.05
+	base.material_override = _mat(Color.YELLOW if sel else color, 1.0)
+	root.add_child(base)
 
 
 func _color(e: Dictionary) -> Color:
