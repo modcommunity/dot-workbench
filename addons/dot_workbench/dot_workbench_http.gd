@@ -19,6 +19,8 @@ var lockout_sec := 300.0
 var clock := Callable()
 
 var _page := ""
+## id -> {"id", "title", "html", "flag"}; see register_page().
+var _pages: Dictionary = {}
 ## address -> {"times": Array[float] of recent failures, "until": float lockout end}
 var _fails: Dictionary = {}
 
@@ -28,6 +30,8 @@ func _init(p_api: DotWorkbenchApi = null) -> void:
 	server.route("GET", "/", _on_page)
 	server.route("GET", "/index.html", _on_page)
 	server.route("POST", "/api", _on_envelope)
+	server.route("GET", "/api/pages", _on_pages_list)
+	server.route_prefix("GET", "/pages", _on_extra_page)
 	for m in ["GET", "PUT", "DELETE", "POST"]:
 		server.route_prefix(m, "/api/profiles", _on_profiles)
 
@@ -43,6 +47,23 @@ func mount_extension(prefix: String, handler: Callable, flag: String = "", metho
 		return _reply(handler.call(auth.value, req))
 	for m in methods:
 		server.route_prefix(m, prefix, route)
+
+
+## Adds a page to the registry: served at `/pages/<id>` (like the main page, without a token; it calls its own mounted routes with the token) and listed, with its title, by the token-gated `GET /api/pages` so the main page can link it. [param html] is the whole page. A non-empty [param flag] hides it from tokens lacking that flag. Re-registering an id replaces it. Returns false for an id that is not `[a-z0-9_-]+` or empty html.
+func register_page(id: String, title: String, html: String, flag: String = "") -> bool:
+	var rx := RegEx.create_from_string("^[a-z0-9_-]+$")
+	if rx.search(id) == null or html.is_empty():
+		return false
+	_pages[id] = {"id": id, "title": title, "html": html, "flag": flag}
+	return true
+
+
+func unregister_page(id: String) -> void:
+	_pages.erase(id)
+
+
+func page_ids() -> PackedStringArray:
+	return PackedStringArray(_pages.keys())
 
 
 ## Reads the `workbench:` block of cfg/server.yml (defaults when absent).
@@ -153,6 +174,29 @@ func _on_page(_req: DotHttpRequest) -> DotHttpResponse:
 	r.headers["Content-Security-Policy"] = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 	r.headers["Referrer-Policy"] = "no-referrer"
 	return r
+
+
+func _on_extra_page(req: DotHttpRequest) -> DotHttpResponse:
+	var id := req.rest.trim_prefix("/")
+	if not _pages.has(id):
+		return DotHttpResponse.error(404, "no such page")
+	var r := DotHttpResponse.html(str(_pages[id]["html"]))
+	r.headers["Cache-Control"] = "no-store"
+	r.headers["Content-Security-Policy"] = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+	r.headers["Referrer-Policy"] = "no-referrer"
+	return r
+
+
+func _on_pages_list(req: DotHttpRequest) -> DotHttpResponse:
+	var auth: Variant = _gate(req)
+	if auth is DotHttpResponse:
+		return auth
+	var out: Array = []
+	for id in _pages:
+		var pg: Dictionary = _pages[id]
+		if str(pg["flag"]).is_empty() or api.permits(auth.value, str(pg["flag"])):
+			out.append({"id": id, "title": pg["title"], "url": "/pages/" + id})
+	return _reply(DotResult.success(out))
 
 
 # Generic envelope: POST /api with the request object, the reply object back.

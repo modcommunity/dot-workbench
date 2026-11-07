@@ -3,8 +3,8 @@ extends Node
 ## Exercises [DotWorkbenchApi] and its HTTP adapter: list, get, set, reset, save, permission refusal and bad input.
 ## Run: godot --headless --path . res://examples/workbench_selftest.tscn
 
-const SECTIONS := 16
-const CHECKS := 148
+const SECTIONS := 17
+const CHECKS := 156
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -289,6 +289,32 @@ func _test_extension() -> void:
 	for i in 5:
 		_http_call(h, "GET", "/api/things", "bad")
 	_check(_http_call(h, "GET", "/api/things")["status"] == 429, "the profile routes' lockout covers extension routes")
+	h.stop()
+	_test_pages()
+
+
+func _test_pages() -> void:
+	_section("page registry")
+	var api := _api()
+	var h := DotWorkbenchHttp.new(api)
+	_check(not h.register_page("Bad Id", "x", "<p>x</p>") and not h.register_page("ok", "x", ""), "a bad id or empty html is refused")
+	_check(h.register_page("tools", "Tools", "<!doctype html><title>Tools</title>") and h.register_page("secret", "Secret", "<title>S</title>", "pagesecret"), "pages register")
+	_w("pg.token", "s3cret")
+	var res := h.start_from_config({"enabled": true, "port": 0, "token_file": BASE + "/pg.token"})
+	if not res.ok:
+		for i in 6:
+			_check(false, "adapter did not start")
+		return
+	var got := _http_call(h, "GET", "/pages/tools", "")
+	_check(got["status"] == 200 and str(got["text"]).contains("<title>Tools</title>"), "a registered page is served at /pages/<id>")
+	_check(_http_call(h, "GET", "/pages/nope", "")["status"] == 404, "an unknown page is 404")
+	_check(_http_call(h, "GET", "/api/pages", "")["status"] == 401, "the page list needs the token")
+	var list := _http_call(h, "GET", "/api/pages")
+	_check(list["status"] == 200 and list["json"]["value"].size() == 1 and list["json"]["value"][0]["url"] == "/pages/tools", "the list hides a page whose flag the token lacks")
+	api.add_flag("pagesecret")
+	_check(_http_call(h, "GET", "/api/pages")["json"]["value"].size() == 2, "once the token holds the flag the page is listed")
+	h.unregister_page("tools")
+	_check(_http_call(h, "GET", "/pages/tools", "")["status"] == 404, "unregister removes it")
 	h.stop()
 
 
