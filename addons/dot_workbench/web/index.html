@@ -46,6 +46,7 @@ td.now { color:var(--ok); font-family:ui-monospace,monospace; font-size:13px; }
 <header>
   <h1>Workbench</h1>
   <span class="muted" id="rev"></span>
+  <nav id="pages"></nav>
   <button id="theme" title="Switch theme">Theme</button>
   <button id="logout" class="hidden">Forget token</button>
 </header>
@@ -131,6 +132,8 @@ async function connect() {
   $("login").classList.add("hidden");
   for (const id of ["picker", "logout"]) $(id).classList.remove("hidden");
   fill($("kind"), r.value.kinds);
+  const pg = await api("GET", "/api/pages");
+  $("pages").replaceChildren(...((pg.ok && pg.value) || []).map(x => { const a = document.createElement("a"); a.href = x.url; a.textContent = x.title; a.target = "_blank"; a.rel = "noopener"; a.style.marginRight = "0.75rem"; return a; }));
   await loadIds();
 }
 
