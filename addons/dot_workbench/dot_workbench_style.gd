@@ -11,6 +11,14 @@ const FIELD := Color(0.118, 0.134, 0.188)
 const FIELD_HOVER := Color(0.157, 0.176, 0.247)
 const BORDER := Color(1, 1, 1, 0.075)
 const ACCENT := Color(0.40, 0.46, 1.0)
+const TEXT := Color(0.94, 0.95, 0.99)
+const TEXT_DIM := Color(0.64, 0.68, 0.78)
+const TEXT_FAINT := Color(0.42, 0.46, 0.57)
+const DANGER := Color(1.0, 0.45, 0.50)
+const GOOD := Color(0.36, 0.88, 0.62)
+## Corner radii shared with the Playground spawn menu (PlaygroundMenuStyle reads these).
+const RADIUS := 14
+const CARD_RADIUS := 18
 
 
 ## Re-colours [param t] (a DotFormTokens, dark) in place and returns it.
@@ -21,15 +29,15 @@ static func apply(t: Object) -> Object:
 	t.set("field", FIELD)
 	t.set("field_hover", FIELD_HOVER)
 	t.set("border", BORDER)
-	t.set("text", Color(0.94, 0.95, 0.99))
-	t.set("text_dim", Color(0.64, 0.68, 0.78))
-	t.set("text_faint", Color(0.42, 0.46, 0.57))
+	t.set("text", TEXT)
+	t.set("text_dim", TEXT_DIM)
+	t.set("text_faint", TEXT_FAINT)
 	t.set("accent", ACCENT)
 	t.set("accent_ink", Color(0.03, 0.04, 0.12))
-	t.set("danger", Color(1.0, 0.45, 0.50))
-	t.set("good", Color(0.36, 0.88, 0.62))
+	t.set("danger", DANGER)
+	t.set("good", GOOD)
 	t.set("shadow", Color(0, 0, 0, 0.5))
-	t.set("radius", 14)
+	t.set("radius", RADIUS)
 	t.set("font_body", 14)
 	t.set("font_small", 12)
 	t.set("font_title", 26)
@@ -39,7 +47,7 @@ static func apply(t: Object) -> Object:
 ## A rounded card; [param glow] tints the border with the accent.
 static func card(t: Object, glow := false, pad := 16) -> StyleBoxFlat:
 	var edge: Color = Color(ACCENT, 0.35) if glow else t.get("border")
-	var b: StyleBoxFlat = t.call("box", t.get("card"), 18, edge, 1, 2)
+	var b: StyleBoxFlat = t.call("box", t.get("card"), CARD_RADIUS, edge, 1, 2)
 	b.set_content_margin_all(pad)
 	return b
 
