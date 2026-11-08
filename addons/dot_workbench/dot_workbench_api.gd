@@ -35,6 +35,8 @@ var _writes: Dictionary = {}
 var _token := ""
 var _inner_permit: Callable = Callable()
 var _sets: Dictionary = {}
+## View kind -> base kind, for [DotWorkbenchSetView]s: listed and read here, edited as the base kind.
+var _views: Dictionary = {}
 ## "kind/id" -> {dotted path: value before the first edit of this session}.
 var _baseline: Dictionary = {}
 
@@ -46,9 +48,13 @@ func _init(p_runtime: DotProfileRuntime = null) -> void:
 	runtime.permit = _permit
 
 
-## Registers a set with the runtime and with the list/get surface.
+## Registers a set with the runtime and with the list/get surface. A [DotWorkbenchSetView] is listed and read under its own
+## kind but kept out of the runtime: requests naming it are edits of its base kind.
 func add_set(set: DotProfileSet) -> void:
-	runtime.add_set(set)
+	if set is DotWorkbenchSetView:
+		_views[set.rel_path] = (set as DotWorkbenchSetView).base_kind
+	else:
+		runtime.add_set(set)
 	_sets[set.rel_path] = set
 
 
@@ -86,6 +92,9 @@ func handle(actor: Variant, req: Dictionary) -> DotResult:
 	if write_limit > 0 and not _take_write_slot(actor):
 		DotLog.warn(CHANNEL, "workbench write rate limited", {"actor": str(actor)})
 		return DotResult.fail(DotError.CODE_RATE_LIMITED, "too many writes; wait %d s" % ceili(write_window_sec))
+	if _views.has(str(req.get("kind", ""))):
+		req = req.duplicate()
+		req["kind"] = _views[req["kind"]]
 	var before: Variant = _value_before(req)
 	var res := runtime.handle_request(actor, req)
 	if res.ok and forward.is_valid():
@@ -108,8 +117,13 @@ func baseline_value(kind: String, id: String, path: String) -> Dictionary:
 	return _lookup_without_runtime(kind, id, path)
 
 
-## The kinds registered with [method add_set].
+## The kinds registered with [method add_set], views left out (each edit, export and baseline is under the base kind).
 func kinds() -> Array:
+	return _sets.keys().filter(func(k: String) -> bool: return not _views.has(k))
+
+
+## Every registered kind, views included, in the order added: what the overlay may list.
+func all_kinds() -> Array:
 	return _sets.keys()
 
 
@@ -256,7 +270,7 @@ func _read_get(req: Dictionary) -> DotResult:
 	if not loaded.ok:
 		return loaded
 	return DotResult.success({
-		"kind": kind, "id": id, "rev": runtime.revision(kind, id),
+		"kind": kind, "id": id, "rev": runtime.revision(String(_views.get(kind, kind)), id),
 		"values": (loaded.value as DotProfile).to_dictionary()["values"],
 		"extra": (loaded.value as DotProfile).to_dictionary()["extra"],
 		"runtime": set.runtime_paths(id),

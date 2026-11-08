@@ -22,9 +22,15 @@ var _import_row: Control
 var wearable_form: DotWorkbenchWearableForm
 var _status_pill: PanelContainer
 var _wearable_card: Control
+var _labels: Dictionary = {}
+var _col: VBoxContainer
+var _loaded_row: HFlowContainer
+## The (kind, heading) pairs the editor was last built with; [method refresh] rebuilds when it changes.
+var _shown: Array = []
 
 
 ## Builds the window, or null when dot-menu or dot-ui is not linked. [param labels] is {kind: heading}; [param animate] false makes every transition instant (tests, screenshots).
+## Only sets [method DotWorkbenchScope.active] are listed, each heading with its side; [method open] re-checks them.
 static func create(p_api: DotWorkbenchApi, actor: Variant, labels: Dictionary = {}, animate := true) -> DotWorkbenchOverlay:
 	if not ResourceLoader.exists(EDITOR_SCRIPT) or not ResourceLoader.exists(TOKENS_SCRIPT):
 		return null
@@ -35,16 +41,13 @@ static func create(p_api: DotWorkbenchApi, actor: Variant, labels: Dictionary = 
 	var tk_script: GDScript = load(TOKENS_SCRIPT)
 	o.tokens = DotWorkbenchStyle.apply(tk_script.call("dark"))
 	o.tokens.set("animate", animate)
-	var ed_script: GDScript = load(EDITOR_SCRIPT)
-	o.editor = ed_script.new()
-	o.editor.set("tokens", o.tokens)
-	o.editor.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	o._labels = labels
 	o.panel.status.connect(o._say)
-	o._build(labels)
+	o._build()
 	return o
 
 
-func _build(labels: Dictionary) -> void:
+func _build() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	theme = tokens.call("build_theme")
 	_extra_theme()
@@ -57,6 +60,10 @@ func _build(labels: Dictionary) -> void:
 	col.add_theme_constant_override("separation", 14)
 	margin.add_child(col)
 	col.add_child(_bar())
+	_loaded_row = HFlowContainer.new()
+	_loaded_row.add_theme_constant_override("h_separation", 8)
+	_loaded_row.add_theme_constant_override("v_separation", 6)
+	col.add_child(_loaded_row)
 	_import_row = _build_import()
 	_import_row.visible = false
 	col.add_child(_import_row)
@@ -65,11 +72,68 @@ func _build(labels: Dictionary) -> void:
 	_wearable_card = _card_around(wearable_form)
 	_wearable_card.visible = false
 	col.add_child(_wearable_card)
-	col.add_child(editor)
-	for kind in api.kinds():
-		var set := api.get_set(kind)
-		editor.call("add_set", set, String(labels.get(kind, kind.capitalize())))
+	_col = col
+	refresh(true)
+
+
+## The sections listed now: [kind, heading] pairs ([method DotWorkbenchScope.sections]).
+func sections() -> Array:
+	return DotWorkbenchScope.sections(api, _labels)
+
+
+## The owners (games, modes, addons) of the listed sections, in order, once each.
+func loaded_owners() -> PackedStringArray:
+	return DotWorkbenchScope.owners(api, _shown)
+
+
+## Rebuilds the editor when what is loaded changed (a mode turned on, a pack added), or always with [param force].
+## The open profile is reopened when it is still listed. True when it rebuilt.
+func refresh(force := false) -> bool:
+	var now := sections()
+	if not force and now == _shown:
+		return false
+	var kind := ""
+	var id := ""
+	if editor != null:
+		kind = str(editor.call("current_kind"))
+		id = str(editor.call("current_id"))
+		editor.queue_free()
+		_col.remove_child(editor)
+	_shown = now
+	var ed_script: GDScript = load(EDITOR_SCRIPT)
+	editor = ed_script.new()
+	editor.set("tokens", tokens)
+	editor.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_col.add_child(editor)
+	for pair: Array in now:
+		editor.call("add_set", api.get_set(pair[0]), pair[1])
 	panel.attach(editor)
+	_fill_loaded()
+	if kind != "" and now.any(func(p: Array) -> bool: return p[0] == kind) and api.get_set(kind).has_id(id):
+		editor.call("open", kind, id)
+	return true
+
+
+func _fill_loaded() -> void:
+	for c in _loaded_row.get_children():
+		_loaded_row.remove_child(c)
+		c.queue_free()
+	var owners := loaded_owners()
+	_loaded_row.visible = not owners.is_empty()
+	var head := Label.new()
+	head.text = "Loaded"
+	head.theme_type_variation = &"WbSub"
+	head.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_loaded_row.add_child(head)
+	for who in owners:
+		var pill := PanelContainer.new()
+		pill.add_theme_stylebox_override("panel", DotWorkbenchStyle.pill(tokens.get("accent"), 0.12))
+		var l := Label.new()
+		l.text = who
+		l.theme_type_variation = &"WbStatus"
+		l.add_theme_color_override("font_color", tokens.get("text_dim"))
+		pill.add_child(l)
+		_loaded_row.add_child(pill)
 
 
 ## Theme bits the stock form kit lacks: a text edit, tooltips and the header looks.
@@ -215,6 +279,7 @@ func is_open() -> bool:
 
 
 func open() -> void:
+	var _rebuilt := refresh()
 	visible = true
 	_pop(self)
 

@@ -3,8 +3,8 @@ extends Node
 ## Exercises [DotWorkbenchApi] and its HTTP adapter: list, get, set, reset, save, permission refusal and bad input.
 ## Run: godot --headless --path . res://examples/workbench_selftest.tscn
 
-const SECTIONS := 18
-const CHECKS := 169
+const SECTIONS := 20
+const CHECKS := 187
 const BASE := "user://workbench_selftest"
 const OUT := "user://workbench_selftest_out"
 
@@ -34,6 +34,8 @@ func _ready() -> void:
 	_test_flag_placement()
 	_test_write_rate_limit()
 	_test_changes()
+	_test_scope()
+	_test_views()
 	_clean()
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
@@ -407,6 +409,109 @@ func _test_schema_field() -> void:
 	_check(form.set_value("crosshair_scale", 2.0).ok and not form.set_value("crosshair_scale", 9.0).ok, "the form refuses a value outside the range")
 	form.free()
 	_check(api.handle(a, _req("get", "weapon", "pistol")).value["values"]["crosshair_scale"] == 1.5, "the refused edit left the live value")
+
+
+func _test_scope() -> void:
+	_section("sections follow what is loaded, each with its side")
+	_clean()
+	var api := DotWorkbenchApi.new()
+	var game := DotProfileSet.create("", "game-a", "config_world", [DotProfileSet.field("speed", "float", 1.0)])
+	var mode := DotProfileSet.create("", "game-a", "config_mode", [DotProfileSet.field("rounds", "int", 3)])
+	var other := DotProfileSet.create("", "game-b", "config_b", [DotProfileSet.field("lives", "int", 3)])
+	var untagged := DotProfileSet.create("pack-x", "", "thing", [])
+	for s in [game, mode, other, untagged]:
+		s.roots = PackedStringArray([BASE])
+		api.add_set(s)
+	var mode_on := [false]
+	var b_loaded := [false]
+	DotWorkbenchScope.tag(game, {"owner": "game-a", "side": DotWorkbenchScope.SIDE_REPLICATED})
+	DotWorkbenchScope.tag(mode, {"owner": "game-a: mode", "side": DotWorkbenchScope.SIDE_SERVER, "requires": func() -> bool: return mode_on[0]})
+	DotWorkbenchScope.tag(other, {"owner": "game-b", "requires": func() -> bool: return b_loaded[0]})
+	var labels := {"config_world": "Game settings: world", "config_mode": "Game settings: mode", "config_b": "B settings"}
+	var kinds := func() -> Array: return DotWorkbenchScope.sections(api, labels).map(func(p: Array) -> String: return p[0])
+	_check(kinds.call() == ["config_world", "thing"], "only game-a's own section and the untagged one show while the mode and game-b are off")
+	mode_on[0] = true
+	_check(kinds.call() == ["config_world", "config_mode", "thing"], "turning the mode on lists its section")
+	b_loaded[0] = true
+	var both := DotWorkbenchScope.sections(api, labels)
+	_check(both.size() == 4 and both[2][1] == "B settings", "with both games loaded both games' sections show")
+	_check(both[0][1] == "Game settings: world  ·  server, replicated" and both[1][1] == "Game settings: mode  ·  server", "headings carry the side")
+	_check(both[3][1] == "Thing", "an untagged set keeps its label and is always shown")
+	_check(DotWorkbenchScope.owners(api, both) == PackedStringArray(["game-a", "game-a: mode", "game-b", "pack-x"]), "owners name each loaded game, mode and addon once")
+	DotWorkbenchScope.tag(other, {"listed": false})
+	_check(not kinds.call().has("config_b") and DotWorkbenchScope.of(other)["owner"] == "game-b", "listed false hides a set; a later tag merges over the first")
+	_check(api.kinds().size() == 4, "hidden sets stay registered with the api")
+
+
+## A set grouping two packs under one kind, like dot-weapon's DotWeaponProfileGroup.
+class FakeGroup extends DotProfileSet:
+	var members: Array[DotProfileSet] = []
+	func list_ids() -> PackedStringArray:
+		var out := PackedStringArray()
+		for m in members:
+			out.append_array(m.list_ids())
+		return out
+	func has_id(id: String) -> bool:
+		return _owner(id) != null
+	func load_profile(id: String) -> DotResult:
+		var m := _owner(id)
+		return m.load_profile(id) if m != null else DotResult.fail(DotError.CODE_INVALID, "no such profile")
+	func check_edit(id: String, path: String, value: Variant) -> DotResult:
+		var m := _owner(id)
+		return m.check_edit(id, path, value) if m != null else DotResult.fail(DotError.CODE_INVALID, "no such profile")
+	func set_runtime(id: String, paths: Dictionary) -> void:
+		super.set_runtime(id, paths)
+		for m in members:
+			m.clear_cache()
+	func _owner(id: String) -> DotProfileSet:
+		for m in members:
+			if m.has_id(id):
+				return m
+		return null
+
+
+func _test_views() -> void:
+	_section("per-pack views over a grouped kind")
+	_clean()
+	_w("addons/pack-a/gun/pistol.yml", "damage: 10\n")
+	_w("addons/pack-a/gun/rifle.yml", "damage: 30\n")
+	_w("addons/pack-b/gun/bow.yml", "damage: 25\n")
+	var schema := [DotProfileSet.field("damage", "int", 1, {"min": 0, "max": 500})]
+	var group := FakeGroup.new()
+	group.game = "mygame"
+	group.rel_path = "gun"
+	group.schema = schema
+	for pack in ["pack-a", "pack-b"]:
+		var m := DotProfileSet.create(pack, "", "gun", schema)
+		m.roots = PackedStringArray([BASE])
+		m.runtime = group.runtime
+		group.members.append(m)
+	var api := DotWorkbenchApi.new()
+	api.runtime.save_root = BASE
+	api.set_admin_token("s3cret")
+	api.add_set(DotWorkbenchScope.tag(group, {"listed": false}) as DotProfileSet)
+	var va := DotWorkbenchSetView.make(group, group.members[0], "pack-a")
+	var vb := DotWorkbenchSetView.make(group, group.members[1], "pack-b")
+	api.add_set(DotWorkbenchScope.tag(va, {"owner": "pack-a"}) as DotProfileSet)
+	api.add_set(DotWorkbenchScope.tag(vb, {"owner": "pack-b"}) as DotProfileSet)
+	var a := DotWorkbenchApi.TOKEN_ACTOR
+	var listed := DotWorkbenchScope.sections(api, {"gun@pack-a": "Guns: pack-a"})
+	_check(listed.size() == 2 and listed[0] == ["gun@pack-a", "Guns: pack-a"] and listed[1][0] == "gun@pack-b", "each pack gets its own section; the group is not listed")
+	_check(api.handle(a, _req("list", "gun@pack-a")).value["ids"] == ["pistol", "rifle"] and api.handle(a, _req("list", "gun@pack-b")).value["ids"] == ["bow"], "a pack's section lists that pack's profiles")
+	_check(api.kinds() == ["gun"], "kinds() leaves views out, so export and baselines see the base kind once")
+	var set := api.handle(a, _req("set", "gun@pack-b", "bow", "damage", 40))
+	_check(set.ok and api.runtime.revision("gun", "bow") == 1, "an edit through a view lands on the base kind's runtime")
+	_check(api.handle(a, _req("get", "gun", "bow")).value["values"]["damage"] == 40 and api.handle(a, _req("get", "gun@pack-b", "bow")).value["values"]["damage"] == 40, "the base kind and the view both read the edit")
+	_check(api.handle(a, _req("get", "gun@pack-b", "bow")).value["rev"] == 1, "a view reports the base kind's revision")
+	var scr := FakeScreen.new()
+	var panel := DotWorkbenchPanel.new(api, a)
+	panel.attach(scr)
+	_check(scr.save_target.call(va, "pistol", {"damage": 12}).ok and va.runtime_paths("pistol") == {"damage": 12}, "the panel applies through a view")
+	_check(_code(api.handle(a, _req("set", "gun@pack-a", "pistol", "damage", 999))) == DotError.CODE_INVALID, "a view's edit is validated like the base kind's")
+	_check(api.baseline_value("gun", "pistol", "damage") == {"found": true, "value": 10}, "the baseline is kept under the base kind")
+	scr.kind = "gun@pack-a"
+	scr.id = "pistol"
+	_check(panel.save_to_server().ok and FileAccess.file_exists(BASE.path_join("server/game/mygame/gun/pistol.yml")), "save from a view writes the base kind's server tier")
 
 
 func _w(rel: String, text: String) -> void:
