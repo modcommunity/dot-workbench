@@ -25,6 +25,11 @@ var _busy := false
 
 
 func _init() -> void:
+	add_theme_constant_override("separation", 10)
+	var head := Label.new()
+	head.text = "Make a wearable"
+	head.theme_type_variation = &"FormName"
+	add_child(head)
 	_file = _row("GLB file", "path to a .glb, origin at the attachment point")
 	_name = _row("Name", "")
 	_slot = _options("Slot", DotWorkbenchPublish.SLOTS)
@@ -34,6 +39,7 @@ func _init() -> void:
 	_token = _row("Token file", "")
 	_go = Button.new()
 	_go.text = "Publish wearable"
+	_go.theme_type_variation = &"FormPrimary"
 	_go.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_go.pressed.connect(func() -> void: var _r := await submit())
 	add_child(_go)
@@ -107,7 +113,8 @@ func _row(label: String, hint: String) -> LineEdit:
 	var row := HBoxContainer.new()
 	var l := Label.new()
 	l.text = label
-	l.custom_minimum_size.x = 90
+	l.theme_type_variation = &"FormCaption"
+	l.custom_minimum_size.x = 100
 	row.add_child(l)
 	var e := LineEdit.new()
 	e.placeholder_text = hint
@@ -121,7 +128,8 @@ func _options(label: String, items: Array) -> OptionButton:
 	var row := HBoxContainer.new()
 	var l := Label.new()
 	l.text = label
-	l.custom_minimum_size.x = 90
+	l.theme_type_variation = &"FormCaption"
+	l.custom_minimum_size.x = 100
 	row.add_child(l)
 	var o := OptionButton.new()
 	for i in items:
