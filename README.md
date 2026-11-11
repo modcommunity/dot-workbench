@@ -1,6 +1,6 @@
 # dot-workbench
 
-Live-edit profiles on a running game through a JSON API over `DotProfileRuntime`, and an off-by-default loopback HTTP page. See [docs/design.md](docs/design.md). Status: API, HTTP adapter and page built; the in-game panel lives in each game (game-playground has one).
+Live-edit profiles on a running game through a JSON API over `DotProfileRuntime`, and an off-by-default loopback HTTP page. See [docs/design.md](docs/design.md). Status: API, HTTP adapter and page built; the in-game panel lives in each game (game-playlot has one).
 
 Enable it in `cfg/server.yml` (the token lives in a file, never in the yml, environment or command line):
 
