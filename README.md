@@ -1,8 +1,15 @@
 # dot-workbench
 
-Live-edit profiles on a running game through a JSON API over `DotProfileRuntime`, and an off-by-default loopback HTTP page. See [docs/design.md](docs/design.md). Status: API, HTTP adapter and page built; the in-game panel lives in each game (game-playlot has one).
+Live-edit profiles on a running game. A JSON API over `DotProfileRuntime`, an in-game window, and an off-by-default loopback web page. Tune values while playing, then export only what you changed.
 
-Enable it in `cfg/server.yml` (the token lives in a file, never in the yml, environment or command line):
+## Install
+
+1. Get [Godot 4.7](https://godotengine.org/download).
+2. Either use [dot-bootstrap](https://github.com/modcommunity/dot-bootstrap), which clones every project and links the addons, or copy `addons/dot_workbench/` and [dot-core](https://github.com/modcommunity/dot-core)'s `addons/dot_core/` into your project and enable dot-workbench in *Project > Project Settings > Plugins*.
+
+## Web page and API
+
+Enable it in `cfg/server.yml`. The token lives in a file, never in the yml, environment or command line.
 
 ```yaml
 workbench:
@@ -12,22 +19,46 @@ workbench:
   token_file: /etc/dot/workbench.token
 ```
 
-The host creates `DotWorkbenchHttp.new(api)`, calls `start_from_config(DotWorkbenchHttp.read_config())` and `poll()` from `_process`. Routes: `GET /` the page; `POST /api` the JSON envelope; `GET /api/profiles[/kind[/id]]`, `PUT /api/profiles/kind/id/key` with `{"value": ...}`, `DELETE /api/profiles/kind/id[/key]`, `POST /api/profiles/save/kind/id`, all with `Authorization: Bearer <token>`.
+The host creates `DotWorkbenchHttp.new(api)`, calls `start_from_config(DotWorkbenchHttp.read_config())` and calls `poll()` from `_process`. All routes except the page need `Authorization: Bearer <token>`.
+
+| Route | Does |
+| --- | --- |
+| `GET /` | The page. |
+| `POST /api` | The JSON envelope. |
+| `GET /api/profiles[/kind[/id]]` | Read profiles. |
+| `PUT /api/profiles/kind/id/key` with `{"value": ...}` | Change a value. |
+| `DELETE /api/profiles/kind/id[/key]` | Reset a value or profile. |
+| `POST /api/profiles/save/kind/id` | Save. |
 
 An exported host needs `*.html` in the preset's `include_filter`, or the page is missing from the pack ([design](docs/design.md#hosting-it-in-a-game-and-exporting-it)).
 
-## Tuning and sending back defaults
+## In-game window
 
-Inside a game the workbench is a window on the **`;`** key, rebindable as `bind_workbench` in the controls settings (or the console command `workbench`). It is on in the editor, in debug builds and for whoever hosts a listen game, and off in a production build. Pick a profile, change values, press Apply: the change is live at once. Nothing is saved until you ask.
+The workbench is a window on the `;` key, rebindable as `bind_workbench` in the controls settings, or the console command `workbench`. It is on in the editor, in debug builds and for whoever hosts a listen game, and off in a production build. Pick a profile, change values, press Apply. The change is live at once, and nothing is saved until you ask.
 
-When the game feels right, press **Export changes as defaults**. It writes only the values that differ from the shipped defaults, one small yml per profile in the repository's own `cfg/` layout, to `user://workbench-export/<date_time>/`, as a zip beside that folder, and as one block of text on your clipboard. Send the zip or paste the text back. To adopt it, copy the `cfg/` folder over the repository's `cfg/` and commit; `game-cvars.yml`, when present, goes into the `cvars:` block of `game.yml`.
+When the game feels right, press **Export changes as defaults**. It writes only the values that differ from the shipped defaults, one small yml per profile in the repository's `cfg/` layout, to `user://workbench-export/<date_time>/`, as a zip beside that folder, and as text on your clipboard. To adopt it, copy the `cfg/` folder over the repository's `cfg/` and commit; `game-cvars.yml`, when present, goes into the `cvars:` block of `game.yml`.
 
-To try somebody else's tuning, press **Import** and paste the text, or type the path of an export folder or zip, then Apply. It goes through the same checks as any edit: out-of-range values and profiles this game does not have are skipped and listed, never applied.
+To try somebody else's tuning, press **Import** and paste the text, or give the path of an export folder or zip, then Apply. It goes through the same checks as any edit: out-of-range values and unknown profiles are skipped and listed.
 
-`DotWorkbenchExport` is the class behind both buttons (`collect()`, `export_changes()`, `import_source(actor, source)`); `DotWorkbenchOverlay` is the window. A game hosts them with dot-game's `DotGameWorkbench` ([dot-game docs/workbench.md](../dot-game/docs/workbench.md)).
+| Class | Role |
+| --- | --- |
+| `DotWorkbenchExport` | Behind both buttons: `collect()`, `export_changes()`, `import_source(actor, source)`. |
+| `DotWorkbenchOverlay` | The window. |
+| `DotWorkbenchScope` | Tags a set with owner, side, `requires` and `listed`, so the window only lists what is loaded. |
+| `DotWorkbenchSetView` | One heading per member of a grouped set, such as one per weapon pack. |
 
-The window lists only what is loaded. A host tags each set with `DotWorkbenchScope.tag(set, {owner, side, requires, listed})`: `requires` (a Callable returning bool) hides a mode's section while that mode is off, `side` (`server`, `replicated`, `client`) is appended to the heading, and the owners of the listed sections show as pills in a **Loaded** row. The window re-checks this every time it opens. A set that groups several sources under one kind (dot-weapon's weapon group, one member per pack) is registered with `listed: false`, plus one `DotWorkbenchSetView.make(group, member, pack)` per member, so each pack gets its own heading while edits still go to the group's kind. Untagged sets are always shown.
+A game hosts the window with dot-game's `DotGameWorkbench` (see dot-game's `docs/workbench.md`).
 
-## Identity (dot-auth, dot-console)
+## Identity
 
-`DotWorkbenchIdentity` is the admin-only gate for `api.identity`, a thin subclass of dot-core's `DotAdminIdentity` (API level 29) that adds `attach()`, the `workbench` log channel and the default `cvar`, `root` flags. Nothing is imported: the host gives it a `resolver` Callable(token) returning a `DotAuthIdentity` (or a Dictionary with `uid`), and optionally a `fallback_permit` Callable(uid, flag) backed by dot-server's admin manager or the console's permissions. Deny by default: only `admin_uids` and members of `admin_groups` get in; guests, expired and uid-less identities never do. Admitted actors are `id:<uid>`, so the runtime's audit line names them; tokens are never logged. `gate.attach(api)` installs it; the admin token keeps working beside it.
+`DotWorkbenchIdentity` is an admin-only gate for `api.identity`, a thin subclass of dot-core's `DotAdminIdentity`. Nothing is imported: the host gives it a `resolver` Callable(token) returning a `DotAuthIdentity` or a Dictionary with `uid`, and optionally a `fallback_permit` Callable(uid, flag) backed by an admin manager. Access is denied by default: only `admin_uids` and members of `admin_groups` get in. Actors are logged as `id:<uid>`, and tokens are never logged. `gate.attach(api)` installs it, and the admin token keeps working beside it.
+
+## Testing
+
+Import the project once, then run `examples/workbench_selftest.tscn` headless with Godot. Design notes: [docs/design.md](docs/design.md).
+
+## Status and licence
+
+Part of the TMC **dot-\*** family of Godot addons. Written with Claude Code and maintained by `gamemann`. Every addon has headless tests, but little of this has been played by real users yet, so expect rough edges and please [open an issue](https://github.com/modcommunity/dot-workbench/issues) when you hit one.
+
+MIT licence, see [LICENSE](LICENSE). The only closed part of the TMC platform is the web back end; you can use your own instead of TMC's.
