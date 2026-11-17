@@ -2,7 +2,7 @@ class_name DotWorkbenchStyle
 extends RefCounted
 
 ## The workbench's slick look: a deeper palette, softer corners and pill controls over dot-ui's [DotFormTokens].
-## Pure styling, no behaviour; a game menu (the Playground spawn menu) can call [method apply] to share the language.
+## Pure styling, no behaviour; a game menu (the Playlot spawn menu) can call [method apply] to share the language.
 
 const BG := Color(0.043, 0.050, 0.075)
 const CARD := Color(0.075, 0.086, 0.125)
@@ -16,7 +16,7 @@ const TEXT_DIM := Color(0.64, 0.68, 0.78)
 const TEXT_FAINT := Color(0.42, 0.46, 0.57)
 const DANGER := Color(1.0, 0.45, 0.50)
 const GOOD := Color(0.36, 0.88, 0.62)
-## Corner radii shared with the Playground spawn menu (PlaygroundMenuStyle reads these).
+## Corner radii shared with the Playlot spawn menu (PlaylotMenuStyle reads these).
 const RADIUS := 14
 const CARD_RADIUS := 18
 
