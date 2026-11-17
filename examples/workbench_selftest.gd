@@ -787,5 +787,5 @@ func _test_export() -> void:
 	api5.permit = Callable()
 	var denied := DotWorkbenchExport.new(api5).import_files("nobody", {"cfg/game/mygame/npc/zombie.yml": "health: 5\n"})
 	_check(not denied.ok and denied.error.code == DotError.CODE_FORBIDDEN, "import needs the edit permission")
-	ex.cvars_provider = func() -> Dictionary: return {"arena_scorelimit": 30}
-	_check(ex.collect().get("game-cvars.yml", "") == "cvars:\n  arena_scorelimit: 30\n", "changed cvars come out as a game.yml block")
+	ex.cvars_provider = func() -> Dictionary: return {"fc_scorelimit": 30}
+	_check(ex.collect().get("game-cvars.yml", "") == "cvars:\n  fc_scorelimit: 30\n", "changed cvars come out as a game.yml block")
