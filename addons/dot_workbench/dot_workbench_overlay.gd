@@ -18,6 +18,7 @@ var last_export: Dictionary = {}
 
 var _status: Label
 var _import_box: TextEdit
+var _drawers: ScrollContainer
 var _import_row: Control
 var wearable_form: DotWorkbenchWearableForm
 var _status_pill: PanelContainer
@@ -68,14 +69,37 @@ func _build() -> void:
 	_loaded_row.add_theme_constant_override("h_separation", 8)
 	_loaded_row.add_theme_constant_override("v_separation", 6)
 	col.add_child(_loaded_row)
+	# The drawers float over the editor in their own layer, below the bar, scrolling when
+	# taller than the window: opening one never pushes the editor off-screen.
+	var layer := Control.new()
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(layer)
+	_drawers = ScrollContainer.new()
+	_drawers.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_drawers.visible = false
+	layer.add_child(_drawers)
+	var drawer_box := VBoxContainer.new()
+	drawer_box.add_theme_constant_override("separation", 14)
+	drawer_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_drawers.add_child(drawer_box)
+	drawer_box.minimum_size_changed.connect(_fit_drawers)
+	resized.connect(_fit_drawers)
 	_import_row = _build_import()
 	_import_row.visible = false
-	col.add_child(_import_row)
+	drawer_box.add_child(_import_row)
 	wearable_form = DotWorkbenchWearableForm.new()
 	wearable_form.status.connect(_say)
 	_wearable_card = _card_around(wearable_form)
 	_wearable_card.visible = false
-	col.add_child(_wearable_card)
+	drawer_box.add_child(_wearable_card)
+	for card in [_import_row, _wearable_card]:
+		var sb := (card as Control).get_theme_stylebox("panel") as StyleBoxFlat
+		if sb != null:
+			sb = sb.duplicate()
+			sb.shadow_color = Color(0, 0, 0, 0.55)
+			sb.shadow_size = 24
+			sb.shadow_offset = Vector2(0, 8)
+			card.add_theme_stylebox_override("panel", sb)
 	_empty_card = _build_empty()
 	_empty_card.visible = false
 	col.add_child(_empty_card)
@@ -365,15 +389,30 @@ func _on_export() -> void:
 	_say("Exported %d files to %s (zip beside it, text on the clipboard)" % [res.value["files"].size() - 1, shown], false)
 
 
+func _fit_drawers() -> void:
+	if _drawers == null or _import_row == null or _wearable_card == null:
+		return
+	_drawers.visible = _import_row.visible or _wearable_card.visible
+	if not _drawers.visible:
+		return
+	var inner := _drawers.get_child(0) as Control
+	var top := _loaded_row.global_position.y + _loaded_row.size.y - global_position.y + 8.0
+	var room := maxf(120.0, size.y - top - 20.0)
+	_drawers.position = Vector2(20, top)
+	_drawers.size = Vector2(size.x - 40.0, minf(inner.get_combined_minimum_size().y, room))
+
+
 func _on_wearable_toggle() -> void:
 	_wearable_card.visible = not _wearable_card.visible
 	_wear_chip.set_pressed_no_signal(_wearable_card.visible)
+	_fit_drawers.call_deferred()
 	_pop(_wearable_card)
 
 
 func _on_import_toggle() -> void:
 	_import_row.visible = not _import_row.visible
 	_import_chip.set_pressed_no_signal(_import_row.visible)
+	_fit_drawers.call_deferred()
 	_pop(_import_row)
 
 
