@@ -25,6 +25,10 @@ var _wearable_card: Control
 var _labels: Dictionary = {}
 var _col: VBoxContainer
 var _loaded_row: HFlowContainer
+var _empty_card: Control
+var _import_chip: Button
+var _wear_chip: Button
+var _status_timer: SceneTreeTimer = null
 ## The (kind, heading) pairs the editor was last built with; [method refresh] rebuilds when it changes.
 var _shown: Array = []
 
@@ -72,6 +76,9 @@ func _build() -> void:
 	_wearable_card = _card_around(wearable_form)
 	_wearable_card.visible = false
 	col.add_child(_wearable_card)
+	_empty_card = _build_empty()
+	_empty_card.visible = false
+	col.add_child(_empty_card)
 	_col = col
 	refresh(true)
 
@@ -108,6 +115,8 @@ func refresh(force := false) -> bool:
 	for pair: Array in now:
 		editor.call("add_set", api.get_set(pair[0]), pair[1])
 	panel.attach(editor)
+	editor.visible = not now.is_empty()
+	_empty_card.visible = now.is_empty()
 	_fill_loaded()
 	if kind != "" and now.any(func(p: Array) -> bool: return p[0] == kind) and api.get_set(kind).has_id(id):
 		editor.call("open", kind, id)
@@ -219,8 +228,14 @@ func _bar() -> Control:
 	_status_pill.add_child(_status)
 	slot.add_child(_status_pill)
 	row.add_child(slot)
-	row.add_child(_chip("Import", _on_import_toggle, "Apply a received export"))
-	row.add_child(_chip("Make wearable", _on_wearable_toggle, "Publish a GLB as a wearable with a creator token"))
+	var imp := _chip("Import", _on_import_toggle, "Apply a received export")
+	imp.toggle_mode = true
+	_import_chip = imp
+	row.add_child(imp)
+	var wear := _chip("Make wearable", _on_wearable_toggle, "Publish a GLB as a wearable with a creator token")
+	wear.toggle_mode = true
+	_wear_chip = wear
+	row.add_child(wear)
 	row.add_child(_chip("Export changes as defaults", _on_export, "Writes only what differs from the shipped defaults, in cfg/ layout"))
 	var save := _button("Save to server", _on_save, "Writes the open profile's edits to cfg/server")
 	save.theme_type_variation = &"WbSave"
@@ -243,6 +258,29 @@ func _chip(text: String, cb: Callable, tip: String) -> Button:
 func _lift(b: Button) -> void:
 	if bool(tokens.get("animate")):
 		DotWorkbenchStyle.lift(b)
+
+
+## The empty state: nothing tunable is loaded yet, so say what to do instead of showing a blank editor.
+func _build_empty() -> Control:
+	var wrap := CenterContainer.new()
+	wrap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	box.custom_minimum_size.x = 420
+	var title := Label.new()
+	title.text = "Nothing to tune yet"
+	title.theme_type_variation = &"FormTitle"
+	title.add_theme_font_size_override("font_size", 22)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(title)
+	var hint := Label.new()
+	hint.text = "Load a game mode or a pack that ships profiles (NPCs, weapons, spawns) and its settings are listed here. You can still Import somebody else's export from the bar above."
+	hint.theme_type_variation = &"FormCaption"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(hint)
+	wrap.add_child(_card_around(box))
+	return wrap
 
 
 func _build_import() -> Control:
@@ -297,6 +335,19 @@ func _say(text: String, bad: bool) -> void:
 	_status.add_theme_color_override("font_color", c)
 	_status_pill.add_theme_stylebox_override("panel", DotWorkbenchStyle.pill(c))
 	_status_pill.visible = not text.is_empty()
+	# A message left up for good reads as current long after it stopped being true, so it fades after a while.
+	if _status_timer != null and _status_timer.timeout.is_connected(_clear_status):
+		_status_timer.timeout.disconnect(_clear_status)
+	_status_timer = null
+	if not text.is_empty() and is_inside_tree() and bool(tokens.get("animate")):
+		_status_timer = get_tree().create_timer(8.0 if bad else 5.0)
+		_status_timer.timeout.connect(_clear_status)
+
+
+func _clear_status() -> void:
+	_status_timer = null
+	if _status_pill != null:
+		_status_pill.visible = false
 
 
 func _on_save() -> void:
@@ -316,11 +367,13 @@ func _on_export() -> void:
 
 func _on_wearable_toggle() -> void:
 	_wearable_card.visible = not _wearable_card.visible
+	_wear_chip.set_pressed_no_signal(_wearable_card.visible)
 	_pop(_wearable_card)
 
 
 func _on_import_toggle() -> void:
 	_import_row.visible = not _import_row.visible
+	_import_chip.set_pressed_no_signal(_import_row.visible)
 	_pop(_import_row)
 
 

@@ -1,5 +1,34 @@
 Live-edit profiles on a running game. A JSON API over `DotProfileRuntime`, an in-game window, and an off-by-default loopback web page. Tune values while playing, then export only what you changed.
 
+## What it looks like
+
+The in-game window: pick a profile on the left, drag a value, and the change is live at once. Rows you changed are marked, **Apply** and **Revert** wait at the bottom, and **Save to server** writes the open profile.
+
+![The in-game workbench editing an NPC profile](docs/workbench-ingame-dark.png)
+
+**Import** takes an export bundle, an export folder or a zip from somebody else's tuning session. It goes through the same checks as any edit, and the button stays lit while the drawer is open.
+
+![The Import drawer](docs/workbench-menu-import.png)
+
+**Make wearable** publishes a GLB as a wearable with a creator token. The site validates and moderates; the form only pre-checks the fields.
+
+![The Make wearable drawer](docs/workbench-menu-wearable.png)
+
+With nothing loaded the window says so and points at Import, instead of showing a blank editor.
+
+![The empty state](docs/workbench-menu-empty.png)
+
+Spawn authoring is point and click in the game's own view: click to add or select a point, Q/E turn it, T sets the team, F places a flag stand.
+
+![The spawn editor gizmos](docs/spawn-editor.png)
+
+The off-by-default web page edits the same profiles from a browser, on desktop and on a phone:
+
+![The web page on desktop](docs/workbench-desktop-dark.png)
+![The web page on a phone](docs/workbench-phone-light.png)
+
+The screenshots are rendered on a real GPU by `tools/menu_shot.gd`, `tools/panel_shot.gd` and `tools/spawn_shot.gd` and are refreshed whenever the look changes.
+
 ## Install
 
 1. Get [Godot 4.7](https://godotengine.org/download).
@@ -54,6 +83,10 @@ A game hosts the window with dot-game's `DotGameWorkbench` (see dot-game's `docs
 ## Testing
 
 Import the project once, then run `examples/workbench_selftest.tscn` headless with Godot. Design notes: [docs/design.md](docs/design.md).
+
+## Quality and ongoing improvement
+
+The window's look, and the models, textures and sounds of the packs it tunes, keep improving over time through the Nightly runs. Screenshots here are re-shot whenever the look changes, so what you see is what ships. Anything rough you meet is worth an [issue](https://github.com/gamespice-platform/workbench/issues).
 
 ## Status and licence
 

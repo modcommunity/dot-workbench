@@ -49,6 +49,13 @@ func _run() -> void:
 	ov._on_wearable_toggle()
 	await _frames(4)
 	_shot("workbench-menu-wearable")
+	ov._on_wearable_toggle()
+	await _frames(2)
+	var empty_ov := DotWorkbenchOverlay.create(DotWorkbenchApi.new(), "admin", {}, false)
+	ov.queue_free()
+	root.add_child(empty_ov)
+	await _frames(4)
+	_shot("workbench-menu-empty")
 	quit(0)
 
 
