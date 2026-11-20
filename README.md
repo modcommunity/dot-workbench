@@ -1,4 +1,4 @@
-[![Workbench - GameSpice addon](docs/banner.png)](https://moddingcommunity.com/a/269-dot-workbench)
+[![Workbench - GameSpice addon](docs/banner.png)](https://moddingcommunity.com/a/109-gs-workbench)
 
 Live-edit profiles on a running game. A JSON API over `DotProfileRuntime`, an in-game window, and an off-by-default loopback web page. Tune values while playing, then export only what you changed.
 
