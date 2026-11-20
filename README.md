@@ -34,7 +34,7 @@ The screenshots are rendered on a real GPU by `tools/menu_shot.gd`, `tools/panel
 ## Install
 
 1. Get [Godot 4.7](https://godotengine.org/download).
-2. Either use [dot-bootstrap](https://github.com/gamespice-platform/bootstrap), which clones every project and links the addons, or copy `addons/dot_workbench/` and [dot-core](https://github.com/gamespice-platform/core)'s `addons/dot_core/` into your project and enable dot-workbench in *Project > Project Settings > Plugins*.
+2. Either use [GameSpice Bootstrap](https://github.com/gamespice-platform/bootstrap), which clones every project and links the addons, or copy `addons/dot_workbench/` and [GameSpice Core](https://github.com/gamespice-platform/core)'s `addons/dot_core/` into your project and enable dot-workbench in *Project > Project Settings > Plugins*.
 
 ## Web page and API
 
@@ -76,11 +76,11 @@ To try somebody else's tuning, press **Import** and paste the text, or give the 
 | `DotWorkbenchScope` | Tags a set with owner, side, `requires` and `listed`, so the window only lists what is loaded. |
 | `DotWorkbenchSetView` | One heading per member of a grouped set, such as one per weapon pack. |
 
-A game hosts the window with dot-game's `DotGameWorkbench` (see dot-game's `docs/workbench.md`).
+A game hosts the window with GameSpice Game's `DotGameWorkbench` (see GameSpice Game's `docs/workbench.md`).
 
 ## Identity
 
-`DotWorkbenchIdentity` is an admin-only gate for `api.identity`, a thin subclass of dot-core's `DotAdminIdentity`. Nothing is imported: the host gives it a `resolver` Callable(token) returning a `DotAuthIdentity` or a Dictionary with `uid`, and optionally a `fallback_permit` Callable(uid, flag) backed by an admin manager. Access is denied by default: only `admin_uids` and members of `admin_groups` get in. Actors are logged as `id:<uid>`, and tokens are never logged. `gate.attach(api)` installs it, and the admin token keeps working beside it.
+`DotWorkbenchIdentity` is an admin-only gate for `api.identity`, a thin subclass of GameSpice Core's `DotAdminIdentity`. Nothing is imported: the host gives it a `resolver` Callable(token) returning a `DotAuthIdentity` or a Dictionary with `uid`, and optionally a `fallback_permit` Callable(uid, flag) backed by an admin manager. Access is denied by default: only `admin_uids` and members of `admin_groups` get in. Actors are logged as `id:<uid>`, and tokens are never logged. `gate.attach(api)` installs it, and the admin token keeps working beside it.
 
 ## Testing
 

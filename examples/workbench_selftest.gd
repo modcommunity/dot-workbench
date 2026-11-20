@@ -321,7 +321,7 @@ func _test_pages() -> void:
 	h.stop()
 
 
-## Stands in for DotProfileEditorScreen so the binding is tested without dot-ui or dot-menu.
+## Stands in for DotProfileEditorScreen so the binding is tested without GameSpice UI or GameSpice Menu.
 class FakeScreen extends RefCounted:
 	var save_target: Callable
 	var reset_target: Callable
@@ -443,7 +443,7 @@ func _test_scope() -> void:
 	_check(api.kinds().size() == 4, "hidden sets stay registered with the api")
 
 
-## A set grouping two packs under one kind, like dot-weapon's DotWeaponProfileGroup.
+## A set grouping two packs under one kind, like GameSpice Weapon's DotWeaponProfileGroup.
 class FakeGroup extends DotProfileSet:
 	var members: Array[DotProfileSet] = []
 	func list_ids() -> PackedStringArray:

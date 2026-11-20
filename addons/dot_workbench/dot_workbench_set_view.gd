@@ -2,7 +2,7 @@ class_name DotWorkbenchSetView
 extends DotProfileSet
 
 ## A second heading over part of a registered set: the ids of [member inner], edited as [member base_kind].
-## For a set that groups several sources under one kind (dot-weapon's weapon group, one member per pack): register the group
+## For a set that groups several sources under one kind (GameSpice Weapon's weapon group, one member per pack): register the group
 ## (scoped `listed: false`) and one view per member, so the overlay lists each pack's profiles under its own heading.
 ## [DotWorkbenchApi] keeps a view out of the runtime and turns its kind back into [member base_kind] for every edit.
 

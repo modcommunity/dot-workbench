@@ -1,7 +1,7 @@
 class_name DotWorkbenchPanel
 extends RefCounted
 
-## Binds an in-game profile editor screen (dot-menu's DotProfileEditorScreen, duck-typed) to a [DotWorkbenchApi].
+## Binds an in-game profile editor screen (GameSpice Menu's DotProfileEditorScreen, duck-typed) to a [DotWorkbenchApi].
 ## Edits take the HTTP page's permission, validation and audit path.
 ## Usage: [code]DotWorkbenchPanel.new(api, admin_uid).attach(editor_screen)[/code], after add_set on the screen.
 

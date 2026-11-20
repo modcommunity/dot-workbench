@@ -1,8 +1,8 @@
 class_name DotWorkbenchOverlay
 extends PanelContainer
 
-## The in-game workbench window: a title bar over dot-menu's profile editor, bound to a [DotWorkbenchApi].
-## dot-ui and dot-menu are loaded by path, so a build without them gets null from [method create].
+## The in-game workbench window: a title bar over GameSpice Menu's profile editor, bound to a [DotWorkbenchApi].
+## GameSpice UI and GameSpice Menu are loaded by path, so a build without them gets null from [method create].
 
 const EDITOR_SCRIPT := "res://addons/dot_menu/ui/dot_profile_editor_screen.gd"
 const TOKENS_SCRIPT := "res://addons/dot_ui/form/dot_form_tokens.gd"
@@ -34,7 +34,7 @@ var _status_timer: SceneTreeTimer = null
 var _shown: Array = []
 
 
-## Builds the window, or null when dot-menu or dot-ui is not linked. [param labels] is {kind: heading}; [param animate] false makes every transition instant (tests, screenshots).
+## Builds the window, or null when GameSpice Menu or GameSpice UI is not linked. [param labels] is {kind: heading}; [param animate] false makes every transition instant (tests, screenshots).
 ## Only sets [method DotWorkbenchScope.active] are listed, each heading with its side; [method open] re-checks them.
 static func create(p_api: DotWorkbenchApi, actor: Variant, labels: Dictionary = {}, animate := true) -> DotWorkbenchOverlay:
 	if not ResourceLoader.exists(EDITOR_SCRIPT) or not ResourceLoader.exists(TOKENS_SCRIPT):

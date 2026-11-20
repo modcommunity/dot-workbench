@@ -1,7 +1,7 @@
 class_name DotWorkbenchIdentity
 extends DotAdminIdentity
 
-## Admin-only identity gate for [DotWorkbenchApi]: [DotAdminIdentity] (dot-core) with the `workbench` log channel, the `cvar` and `root` flags by default, and [method attach]. Duck-typed, so dot-auth and dot-console stay optional.
+## Admin-only identity gate for [DotWorkbenchApi]: [DotAdminIdentity] (GameSpice Core) with the `workbench` log channel, the `cvar` and `root` flags by default, and [method attach]. Duck-typed, so GameSpice Auth and GameSpice Console stay optional.
 
 const CHANNEL := "workbench"
 

@@ -13,12 +13,12 @@ const OP_CHANGES := "changes"
 var read_flag := "cvar"
 ## Flags the admin token holds; the token is a full admin by default.
 var token_flags := PackedStringArray(["cvar", "root"])
-## Optional Callable(token) -> actor or null, for dot-auth style identities (duck-typed).
+## Optional Callable(token) -> actor or null, for GameSpice Auth style identities (duck-typed).
 var identity: Callable = Callable()
 ## Optional Callable(req) called with each write request this api applied, to repeat it elsewhere: a client's panel edits its local copy and forwards here to the server, which checks it again.
 var forward: Callable = Callable()
 
-## The host's Callable(actor, flag) -> bool (dot-server's DotAdminManager); set it here, not on the runtime.
+## The host's Callable(actor, flag) -> bool (GameSpice Server's DotAdminManager); set it here, not on the runtime.
 var permit: Callable = Callable():
 	set(v):
 		_inner_permit = v

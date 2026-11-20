@@ -1,7 +1,7 @@
 class_name DotWorkbenchStyle
 extends RefCounted
 
-## The workbench's slick look: a deeper palette, softer corners and pill controls over dot-ui's [DotFormTokens].
+## The workbench's slick look: a deeper palette, softer corners and pill controls over GameSpice UI's [DotFormTokens].
 ## Pure styling, no behaviour; a game menu (the Playlot spawn menu) can call [method apply] to share the language.
 
 const BG := Color(0.043, 0.050, 0.075)
