@@ -86,7 +86,7 @@ Import the project once, then run `examples/workbench_selftest.tscn` headless wi
 
 ## Quality and ongoing improvement
 
-The window's look, and the models, textures and sounds of the packs it tunes, keep improving over time through the Nightly runs. Screenshots here are re-shot whenever the look changes, so what you see is what ships. Anything rough you meet is worth an [issue](https://github.com/gamespice-platform/workbench/issues).
+The models, textures, animations, sounds and maps of the packs this tool tunes, and the window itself, are improved automatically and recursively by AI agents. [Nightly](https://github.com/gamemann/nightly) keeps a board of improvement items. Agents pick up an item, make the change, render fresh frames and check them with a visual judge. Judge findings become new items, and the loop repeats until the result is production quality. Improvements ship as new pack versions, and the screenshots in this README are re-shot each time. Anything rough you meet is worth an [issue](https://github.com/gamespice-platform/workbench/issues).
 
 ## Status and licence
 
